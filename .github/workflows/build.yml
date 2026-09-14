@@ -1,0 +1,55 @@
+name: build
+
+# F0 gate: the fork builds the unchanged upstream T-Beam Supreme target, and
+# every push publishes the binary with its SHA-256 so a recipient can compare
+# what shipped against what the source produces (GPL compliance kit §4).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  tbeam_supreme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+          arduino-cli version
+
+      - name: Install the ESP32 core and libraries (upstream recipe)
+        run: make prep-esp32
+
+      - name: Build the T-Beam Supreme target (upstream recipe)
+        run: make firmware-tbeam_supreme
+
+      - name: Record what was built
+        run: |
+          mkdir -p out
+          cp build/esp32.esp32.esp32s3/RNode_Firmware.ino.bin out/stolo-node-firmware_tbeam_supreme.bin
+          cp build/esp32.esp32.esp32s3/RNode_Firmware.ino.bootloader.bin out/stolo-node-firmware_tbeam_supreme.bootloader.bin
+          cp build/esp32.esp32.esp32s3/RNode_Firmware.ino.partitions.bin out/stolo-node-firmware_tbeam_supreme.partitions.bin
+          (cd out && sha256sum *.bin > SHA256SUMS)
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess, datetime
+          sha = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+          core = subprocess.check_output(["grep", "ARDUINO_ESP_CORE_VER", "Makefile"]).decode().strip()
+          binhash = hashlib.sha256(open("out/stolo-node-firmware_tbeam_supreme.bin", "rb").read()).hexdigest()
+          json.dump({
+              "target": "tbeam_supreme",
+              "source": sha,
+              "toolchain": core,
+              "binary_sha256": binhash,
+              "built_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+          }, open("out/release-manifest.json", "w"), indent=2)
+          PY
+          cat out/SHA256SUMS out/release-manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stolo-node-firmware_tbeam_supreme
+          path: out/
