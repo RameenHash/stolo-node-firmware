@@ -14,7 +14,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 // Modified by Stolo Systems Inc., 2026-09-14 — see Stolo.h and CHANGES-from-upstream.md.
-#include "Stolo.h"
 
 #if MCU_VARIANT == MCU_ESP32
 
@@ -45,7 +44,7 @@
 #endif
 
 #if defined(STOLO_BUILD)
-  #define BT_PAIRING_TIMEOUT STOLO_BT_PAIRING_TIMEOUT
+  #define BT_PAIRING_TIMEOUT stolo_bt_window_ms()
 #else
   #define BT_PAIRING_TIMEOUT 35000
 #endif

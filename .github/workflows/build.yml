@@ -60,3 +60,28 @@ jobs:
         with:
           name: stolo-node-firmware_tbeam_supreme
           path: RNode_Firmware/out/
+
+  stolo_tbeam_supreme:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: RNode_Firmware
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: RNode_Firmware
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+      - name: Install the ESP32 core and libraries (upstream recipe)
+        run: make prep-esp32
+      - name: Build the Stolo T-Beam Supreme target (-DSTOLO_BUILD=1)
+        run: make firmware-stolo-tbeam_supreme
+      - name: Record what was built
+        run: |
+          mkdir -p out && cp build/esp32.esp32.esp32s3/RNode_Firmware.ino.bin out/stolo-node-firmware_stolo_tbeam_supreme.bin
+          (cd out && sha256sum *.bin > SHA256SUMS && cat SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stolo-node-firmware_stolo_tbeam_supreme
+          path: RNode_Firmware/out/

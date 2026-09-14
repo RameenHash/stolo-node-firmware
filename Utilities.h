@@ -14,6 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "Config.h"
+// Modified by Stolo Systems Inc., 2026-09-14 — see Stolo.h and CHANGES-from-upstream.md.
+#include "Stolo.h"
 
 #if HAS_EEPROM
     #include <EEPROM.h>
@@ -2042,3 +2044,7 @@ void host_disconnected() {
 	last_rssi_raw = 0x00;
 	last_snr_raw  = 0x80;
 }
+
+// Stolo additions, last: they call what everything above defines.
+#include "StoloStore.h"
+#include "StoloProtocol.h"
