@@ -22,3 +22,4 @@ files carry a Stolo copyright header under the same licence.
 | Date | Area | Change | Why |
 |---|---|---|---|
 | 2026-09-14 | Repo | Added `CHANGES-from-upstream.md`, `STOLO.md`, and a CI workflow that builds the T-Beam Supreme target from the pinned source and publishes the binary with its SHA-256. | GPL kit §4 (reproducible build + release manifest) and the F0 gate: the fork must build the unchanged target before any Stolo change lands. No firmware source is modified by this entry. |
+| 2026-09-14 | `Makefile` | Added `flash-stolo-tbeam_supreme` (PORT/STOLO_PY/STOLO_RNODECONF variables): the upstream `upload-tbeam_supreme` sequence for a macOS bench (`/dev/cu.usbmodem*`, an explicit Python, no console-partition rewrite). Marked `Modified by Stolo Systems Inc., 2026-09-14`. | The upstream recipes assume Linux paths. The console partition is left alone until F9 regenerates the console image from this fork's source. |

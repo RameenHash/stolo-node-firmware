@@ -277,6 +277,25 @@ upload-xiao_s3:
 	@sleep 3
 	python ./Release/esptool/esptool.py --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m --flash_size 4MB 0x210000 ./Release/console_image.bin
 
+# ---------------------------------------------------------------------------
+# Stolo additions (Modified by Stolo Systems Inc., 2026-09-14). The upstream
+# upload-* recipes assume Linux (/dev/ttyACM0, `python`, ~/.arduino15). This
+# is the same sequence for the bench Mac: flash the application, then write
+# the firmware-hash target the EEPROM signature check compares against. The
+# console partition (0x210000) is deliberately NOT rewritten here — the unit
+# keeps the console image it shipped with until F9 regenerates it from this
+# fork's source.
+#
+#   make flash-stolo-tbeam_supreme PORT=/dev/cu.usbmodem2101
+STOLO_PY ?= python3
+STOLO_RNODECONF ?= rnodeconf
+PORT ?= /dev/cu.usbmodem2101
+
+flash-stolo-tbeam_supreme:
+	arduino-cli upload -p $(PORT) --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc" --config-file arduino-cli.yaml
+	@sleep 2
+	$(STOLO_RNODECONF) $(PORT) --firmware-hash $$($(STOLO_PY) ./partition_hashes ./build/esp32.esp32.esp32s3/RNode_Firmware.ino.bin)
+
 release: release-all
 
 release-all: console-site spiffs-image release-tbeam release-tbeam_sx1262 release-lora32_v10 release-lora32_v20 release-lora32_v21 release-lora32_v10_extled release-lora32_v20_extled release-lora32_v21_extled release-lora32_v21_tcxo release-featheresp32 release-genericesp32 release-heltec32_v2 release-heltec32_v3 release-heltec32_v4 release-heltec32_v2_extled release-heltec_t114 release-techo release-rnode_ng_20 release-rnode_ng_21 release-t3s3 release-t3s3_sx127x release-t3s3_sx1280_pa release-tdeck release-tbeam_supreme release-rak4631 release-xiao_s3 release-hashes
