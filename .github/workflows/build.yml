@@ -13,8 +13,15 @@ on:
 jobs:
   tbeam_supreme:
     runs-on: ubuntu-latest
+    # Arduino requires the sketch folder to be named after the .ino, and
+    # actions/checkout would otherwise use the repository name.
+    defaults:
+      run:
+        working-directory: RNode_Firmware
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: RNode_Firmware
 
       - name: Install arduino-cli
         run: |
@@ -52,4 +59,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: stolo-node-firmware_tbeam_supreme
-          path: out/
+          path: RNode_Firmware/out/
