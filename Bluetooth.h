@@ -13,6 +13,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// Modified by Stolo Systems Inc., 2026-09-14 — see Stolo.h and CHANGES-from-upstream.md.
+#include "Stolo.h"
+
 #if MCU_VARIANT == MCU_ESP32
 
 #elif MCU_VARIANT == MCU_NRF52
@@ -41,7 +44,11 @@
   bool SerialBT_init = false;
 #endif
 
-#define BT_PAIRING_TIMEOUT 35000
+#if defined(STOLO_BUILD)
+  #define BT_PAIRING_TIMEOUT STOLO_BT_PAIRING_TIMEOUT
+#else
+  #define BT_PAIRING_TIMEOUT 35000
+#endif
 #define BLE_FLUSH_TIMEOUT 20
 uint32_t bt_pairing_started = 0;
 
@@ -170,7 +177,7 @@ char bt_devname[11];
     }
 
   #elif HAS_BLE == true
-    bool bt_setup_hw(); void bt_security_setup();
+    bool bt_setup_hw(); void bt_security_setup(); void bt_enable_pairing(); bool stolo_bt_has_bonds();
     BLESecurity *ble_security = new BLESecurity();
     bool ble_authenticated = false;
     uint32_t pairing_pin = 0;
@@ -184,6 +191,12 @@ char bt_devname[11];
         bt_state = BT_STATE_ON;
         SerialBT.begin(bt_devname);
         SerialBT.setTimeout(10);
+        #if defined(STOLO_BUILD)
+          // A radio nobody has bonded to is a radio nobody can reach over
+          // BLE: it boots straight into pairing, and update_bt() keeps the
+          // window open until the first bond lands.
+          if (!stolo_bt_has_bonds()) { bt_enable_pairing(); }
+        #endif
       }
     }
 
@@ -216,6 +229,10 @@ char bt_devname[11];
       for (int i = 0; i < dev_num; i++) { esp_ble_remove_bond_device(dev_list[i].bd_addr); }
       free(dev_list);
     }
+
+    #if defined(STOLO_BUILD)
+      bool stolo_bt_has_bonds() { return esp_ble_get_bond_device_num() > 0; }
+    #endif
 
     void bt_enable_pairing() {
       // Serial.println("BT enable pairing");
@@ -286,8 +303,15 @@ char bt_devname[11];
         // Serial.println("Authentication success");
         ble_authenticated = true;
         if (bt_state == BT_STATE_PAIRING) {
-          // Serial.println("Pairing complete, disconnecting");
-          delay(2000); SerialBT.disconnect();
+          #if defined(STOLO_BUILD)
+            // The bonded link is the link the host wants. Upstream dropped
+            // it 2 s after pairing, making "pair" and "connect" two
+            // separate steps for the user and the app.
+            bt_state = BT_STATE_CONNECTED;
+          #else
+            // Serial.println("Pairing complete, disconnecting");
+            delay(2000); SerialBT.disconnect();
+          #endif
         } else { bt_state = BT_STATE_CONNECTED; }
       } else {
         // Serial.println("Authentication fail");
@@ -378,7 +402,15 @@ char bt_devname[11];
 
     void update_bt() {
       if (bt_allow_pairing && millis()-bt_pairing_started >= BT_PAIRING_TIMEOUT) {
-        bt_disable_pairing();
+        #if defined(STOLO_BUILD)
+          // No bonds yet: the window does not close, or a factory-fresh
+          // unit with no cable would be unreachable. Once one phone is
+          // bonded the window is a real window again.
+          if (!stolo_bt_has_bonds()) { bt_pairing_started = millis(); }
+          else { bt_disable_pairing(); }
+        #else
+          bt_disable_pairing();
+        #endif
       }
       if (bt_state == BT_STATE_CONNECTED && millis()-SerialBT.lastFlushTime >= BLE_FLUSH_TIMEOUT) {
         if (SerialBT.transmitBufferLength > 0) {

@@ -291,6 +291,13 @@ STOLO_PY ?= python3
 STOLO_RNODECONF ?= rnodeconf
 PORT ?= /dev/cu.usbmodem2101
 
+# The Stolo build of the T-Beam Supreme target: upstream's recipe plus
+# -DSTOLO_BUILD=1, which compiles in everything Stolo.h and the
+# STOLO_BUILD blocks change. Same build directory, so flash-stolo-* flashes
+# whichever of the two was built last.
+firmware-stolo-tbeam_supreme:
+	arduino-cli compile --log --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc" -e --build-property "build.partitions=no_ota" --build-property "upload.maximum_size=2097152" --build-property "compiler.cpp.extra_flags=-DBOARD_MODEL=0x3D -DSTOLO_BUILD=1"
+
 flash-stolo-tbeam_supreme:
 	arduino-cli upload -p $(PORT) --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc" --config-file arduino-cli.yaml
 	@sleep 2
