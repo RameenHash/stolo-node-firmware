@@ -11,6 +11,7 @@ to the same port at the same time (one process owns a serial port).
     stolo_node_tool.py keygen owner.key
     stolo_node_tool.py hello
     stolo_node_tool.py enroll-owner --key owner.key
+    stolo_node_tool.py enroll-owner --key new-owner.key --handover-from owner.key
     stolo_node_tool.py get-radio
     stolo_node_tool.py set-radio --key owner.key --frequency 915000000 --txpower 17
     stolo_node_tool.py get-wifi
@@ -141,7 +142,11 @@ class Node:
         return True
 
     def enroll(self, key):
-        self.hello()
+        # No HELLO here unless the node key is still unknown: HELLO clears
+        # authorization, and a hand-over is an ENROLL sent from the session
+        # the current owner just authenticated.
+        if getattr(self, "node_pub", None) is None:
+            self.hello()
         owner_pub = key.public_key().public_bytes_raw()
         proof = key.sign(b"stolo-enroll-v1" + self.node_pub + owner_pub)
         b = self.request(T["ENROLL"], owner_pub + proof)
@@ -229,6 +234,8 @@ def main(argv=None):
     ap.add_argument("--port", default=os.environ.get("STOLO_PORT", "/dev/cu.usbmodem2101"))
     ap.add_argument("--key", help="owner key file (from keygen) for anything that changes the node")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--handover-from", metavar="KEYFILE",
+                    help="enroll-owner: authenticate with the CURRENT owner key first (hand-over on an owned node)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("keygen").add_argument("file")
     for name in ("hello", "get-radio", "get-wifi", "get-bt", "faults", "enroll-owner", "forget-owner"):
@@ -259,7 +266,10 @@ def main(argv=None):
             if needs_key and key is None:
                 ap.error(f"{a.cmd} needs --key")
             if a.cmd == "hello": out = node.hello()
-            elif a.cmd == "enroll-owner": out = node.enroll(key)
+            elif a.cmd == "enroll-owner":
+                if a.handover_from:
+                    node.auth(load_key(a.handover_from))
+                out = node.enroll(key)
             elif a.cmd == "get-radio": out = node.get_radio()
             elif a.cmd == "get-wifi": out = node.get_wifi()
             elif a.cmd == "get-bt": out = node.get_bt()
