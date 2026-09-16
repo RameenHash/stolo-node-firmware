@@ -47,3 +47,21 @@ from `rnodeconf --eeprom-backup` before the first flash of any unit.
 - Record every change in `CHANGES-from-upstream.md`.
 - Every release: source tarball, binary, `SHA256SUMS`, and a release manifest
   (see the CI workflow) — the materials `stolo.io/source/` serves.
+
+## Talking to a Stolo build over USB
+
+`Tools/stolo_node_tool.py` speaks the Stolo Control Protocol
+(`Documentation/stolo-control-protocol.md`) on the serial port. It needs
+`pyserial` and `cryptography` (both in the gridx venv). RNS must not be
+attached to the same port at the same time.
+
+    python3 Tools/stolo_node_tool.py hello
+    python3 Tools/stolo_node_tool.py keygen owner.key
+    python3 Tools/stolo_node_tool.py enroll-owner --key owner.key     # allowed while unowned
+    python3 Tools/stolo_node_tool.py set-radio --key owner.key --frequency 915000000 --txpower 17
+    python3 Tools/stolo_node_tool.py set-wifi  --key owner.key --mode ap --ssid "Stolo Node" --psk secret --channel 6
+    python3 Tools/stolo_node_tool.py set-bt    --key owner.key --window 120
+
+An owned node accepts a new owner only while its boot-time enrollment
+window is open (hold the button while applying power, ≥ 3 s), or from a
+session the current owner authenticated.
