@@ -52,6 +52,8 @@ void stolo_rescue_announce(uint8_t flashes);
 void setFrequency(); void setBandwidth(); void setSpreadingFactor();
 void setCodingRate(); void setTXPower(); bool startRadio(); void stopRadio();
 
+#include "StoloDisplay.h"
+
 #define SCP_VERSION       0x02
 #define STOLO_MSG_MAX     255
 #define CMD_STOLO_DROP    0x7B   // internal parser sink, never on the wire
@@ -159,6 +161,8 @@ uint8_t  stolo_rx[STOLO_MSG_MAX];
 uint16_t stolo_rx_len = 0;
 bool     stolo_rx_overflow = false;
 uint32_t stolo_enroll_window_until = 0;
+bool stolo_identity_notice = false;
+uint32_t stolo_identity_since = 0;
 volatile bool stolo_usb_boundary_pending = false;
 volatile bool stolo_ble_boundary_pending = false;
 
@@ -173,6 +177,12 @@ void stolo_ble_event_send(const uint8_t* bytes, size_t len, uint32_t link);
 
 bool stolo_enroll_window_open() {
   return stolo_enroll_window_until != 0 && (int32_t)(stolo_enroll_window_until - millis()) > 0;
+}
+
+StoloBanner stolo_current_banner(uint32_t now, bool pairing_pin) {
+  return stolo_select_banner(now, pairing_pin,
+      stolo_store_state == STOLO_STORE_RECOVERY, stolo_enroll_window_open(),
+      stolo_enroll_window_until, stolo_identity_notice, stolo_identity_since);
 }
 
 // A connection boundary: everything the previous host earned is gone.
@@ -320,7 +330,7 @@ void stolo_reply_hello(uint8_t seq) {
   if (stolo_store_ok) flags |= 0x08;
   if (stolo_role() == STOLO_ROLE_COMPAT) flags |= 0x10;
   body[n++] = flags;
-  body[n++] = 0x00;  // attestation: advisory/unknown until F8
+  body[n++] = stolo_display_capabilities();  // advisory build capabilities, not attestation
   put_u32(body, &n, stolo_cfg.owner_epoch);
   memcpy(body + n, stolo_session.nonce, 16); n += 16;
   body[n++] = stolo_session.source;
@@ -450,6 +460,8 @@ void stolo_handle_rescue(uint8_t seq, const uint8_t* body, uint16_t len) {
   }
   stolo_rescue_announce(6);
   if (!stolo_store_rescue()) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "rescue incomplete: retry physical rescue"); return; }
+  stolo_identity_since = millis();
+  stolo_identity_notice = true;
   stolo_enroll_window_until = 0;
   stolo_session_reset(stolo_session.source);
   uint8_t reply[33]; reply[0] = 1; memcpy(reply + 1, stolo_cfg.node_pub, 32);
@@ -790,7 +802,7 @@ bool stolo_kiss_txp_write(int p) {
 // Holding the button while power is applied opens a 60 s enrollment
 // window: the physical-presence gesture an already-owned node requires
 // before it accepts a new owner. Read here, before the input handler
-// exists, straight from the pin. F8 makes it visible on the display.
+// exists, straight from the pin. The display reads this same window.
 void stolo_setup() {
   stolo_store_init();
   stolo_session_reset(STOLO_SRC_USB);
@@ -806,6 +818,7 @@ void stolo_setup() {
 
 void stolo_update() {
   if (stolo_enroll_window_until != 0 && !stolo_enroll_window_open()) stolo_enroll_window_until = 0;
+  if (stolo_identity_notice && (uint32_t)(millis() - stolo_identity_since) >= 5000) stolo_identity_notice = false;
   stolo_poll_session();
 }
 

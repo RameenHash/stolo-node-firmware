@@ -1,3 +1,4 @@
+# Modified by Stolo Systems Inc., 2026-09-19 — factual firmware attribution footer.
 import markdown
 import os
 import sys
@@ -35,7 +36,7 @@ document_start = """
 <span class="logo">RNode Console</span>
 {MENU}<hr>"""
 
-document_end = """</body></html>"""
+document_end = """<footer><p>RNode firmware · unsigned.io · GPLv3</p></footer></body></html>"""
 
 menu_md = """<center markdown=\"1\"><span class="menu">[Start]({CONTENT_PATH}index.html) | [Replicate]({CONTENT_PATH}replicate.html) | [Software]({CONTENT_PATH}software.html) | [Learn]({CONTENT_PATH}learn.html) | [Help](help.html) | [Contribute]({CONTENT_PATH}contribute.html)</span></center>"""
 

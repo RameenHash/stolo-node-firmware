@@ -1,4 +1,5 @@
 # Copyright (C) 2024, Mark Qvist
+# Modified by Stolo Systems Inc., 2026-09-19 — OLED host checks.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -548,6 +549,7 @@ release-xiao_s3:
 # transitions and policy ("software verified"), never ESP32 behaviour
 # ("device qualified", see the plan's testing queue).
 test-host:
+	python3 Tools/oled_bitmaps.py --check
 	@mkdir -p build/host
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/authority_test Tests/host/authority_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/store_test Tests/host/store_test.cpp
@@ -560,6 +562,10 @@ test-host:
 	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=0 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_tiny_test Tests/host/transport_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/control_test Tests/host/control_test.cpp
 	g++ -std=c++17 -Wall -Ibuild/host -o build/host/ble_control_test Tests/host/ble_control_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -DHAS_DISPLAY=1 -I. -ITests/host -ITests/host/stubs -o build/host/display_test Tests/host/display_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -DHAS_DISPLAY=0 -I. -ITests/host -ITests/host/stubs -o build/host/display_headless_test Tests/host/display_test.cpp
+	./build/host/display_test
+	./build/host/display_headless_test
 	./build/host/ble_control_test
 	./build/host/control_test
 	./build/host/transport_hw_test
