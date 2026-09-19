@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// Modified by Stolo Systems Inc., 2026-09-19 — discard BLE buffers at disconnect.
 #include "Boards.h"
 
 #if PLATFORM != PLATFORM_NRF52
@@ -34,7 +35,12 @@ void BLESerial::onPassKeyNotify(uint32_t passkey) { bt_passkey_notify_callback(p
 bool BLESerial::onSecurityRequest() { return bt_security_request_callback(); }
 void BLESerial::onAuthenticationComplete(esp_ble_auth_cmpl_t auth_result) { bt_authentication_complete_callback(auth_result); }
 void BLESerial::onConnect(BLEServer *server) { bt_connect_callback(server); }
-void BLESerial::onDisconnect(BLEServer *server) { bt_disconnect_callback(server); ble_server->startAdvertising(); }
+void BLESerial::onDisconnect(BLEServer *server) {
+  #if defined(STOLO_BUILD)
+    rx_buffer.clear(); transmitBufferLength = 0; numAvailableLines = 0;
+  #endif
+  bt_disconnect_callback(server); ble_server->startAdvertising();
+}
 bool BLESerial::onConfirmPIN(uint32_t pin) { return bt_confirm_pin_callback(pin); };
 bool BLESerial::connected() { return ble_server->getConnectedCount() > 0; }
 

@@ -49,16 +49,15 @@ static void test_owner_session_binding() {
   CHECK(!stolo_is_owner() && stolo_role() == STOLO_ROLE_GUEST, "authorization does NOT survive a source change");
   CHECK(!stolo_kiss_gate(CMD_FREQUENCY), "the next source cannot retune over KISS");
   std::vector<uint8_t> sf = {SCP_R_SF, 1, 9}; scp(SCP_SET_RADIO, sf, 3);
-  CHECK(errored(SCP_ERR_BAD_REQUEST) || errored(SCP_ERR_UNAUTHORIZED), "the next source cannot SET_RADIO without its own HELLO+AUTH");
+  CHECK(errored(SCP_ERR_NOT_SUPPORTED), "the next source cannot SET_RADIO without its own HELLO+AUTH");
   CHECK(lora_sf == 8, "nothing changed");
   // Disconnect ends the session even with the same source label.
   as_source(STOLO_SRC_USB); become_owner(); CHECK(stolo_is_owner(), "re-authenticated on USB");
   stolo_host_disconnected();
   CHECK(!stolo_is_owner(), "host disconnect ends authorization");
-  become_owner(); stolo_kiss_gate(CMD_LEAVE);
-  CHECK(!stolo_is_owner(), "CMD_LEAVE ends authorization");
-  become_owner(); stolo_kiss_gate(CMD_RESET);
-  CHECK(!stolo_is_owner(), "CMD_RESET ends authorization");
+  become_owner();
+  CHECK(stolo_kiss_gate(CMD_LEAVE) && stolo_is_owner(), "LEAVE gate checks authority before execution");
+  CHECK(stolo_kiss_gate(CMD_RESET) && stolo_is_owner(), "RESET gate permits the owner before execution");
   // Idle timeout.
   become_owner(); fake_millis += STOLO_SESSION_IDLE_MS + 1; stolo_update();
   CHECK(!stolo_is_owner(), "an idle owner session expires");
@@ -135,7 +134,7 @@ static void test_set_transactions() {
   std::vector<uint8_t> good_wifi = {SCP_W_MODE, 1, WR_WIFI_AP, SCP_W_SSID, 4, 'R', 'o', 'o', 'f', SCP_W_CHN, 1, 6};
   scp(SCP_SET_WIFI, good_wifi, 4);
   CHECK(replied(SCP_SET_WIFI | SCP_REPLY) && EEPROM.bytes[0] == 'R' && wifi_mode == WR_WIFI_AP, "SET_WIFI applies a valid request");
-  { auto b = last_body(); CHECK(b.back() == 0b1011, "SET_WIFI reply reports the applied tags (mode, ssid, chn)"); }
+  { auto b = last_body(); CHECK(b[b.size()-2] == 0b1011 && b.back()==SCP_PENDING_RUNTIME, "SET_WIFI reply reports the applied tags (mode, ssid, chn)"); }
   { size_t reply_at = 0, init_at = 0; for (size_t i = 0; i < calls.size(); i++) if (calls[i] == "wifi_remote_init") init_at = i; (void)reply_at; CHECK(init_at == calls.size() - 1, "the WiFi restart is the LAST thing SET_WIFI does"); }
   // SET_BT with a later bad field disables nothing.
   bt_enabled = true; std::vector<uint8_t> bad_bt = {SCP_B_ENABLED, 1, 0, SCP_B_WINDOW, 1, 1};

@@ -1554,14 +1554,16 @@ void eeprom_flush() {
 }
 #endif
 
-void eeprom_update(int mapped_addr, uint8_t byte) {
+bool eeprom_update(int mapped_addr, uint8_t byte) {
 	#if MCU_VARIANT == MCU_1284P || MCU_VARIANT == MCU_2560
 		EEPROM.update(mapped_addr, byte);
 	#elif MCU_VARIANT == MCU_ESP32
 		if (EEPROM.read(mapped_addr) != byte) {
 			EEPROM.write(mapped_addr, byte);
-			EEPROM.commit();
 		}
+    // Commit even an unchanged cached byte: a previous failed commit may
+    // have left the EEPROM RAM buffer dirty. Never acknowledge that cache.
+    return EEPROM.commit();
   #elif !HAS_EEPROM && MCU_VARIANT == MCU_NRF52
     // todo: clean up this implementation, writing one byte and syncing
     // each time is really slow, but this is also suboptimal
@@ -1576,6 +1578,7 @@ void eeprom_update(int mapped_addr, uint8_t byte) {
     written_bytes++;
     eeprom_flush();
 	#endif
+  return true;
 }
 
 void eeprom_write(uint8_t addr, uint8_t byte) {
@@ -1729,28 +1732,14 @@ bool eeprom_checksum_valid() {
 	return checksum_valid;
 }
 
-void wr_conf_save(uint8_t mode) {
-	eeprom_update(eeprom_addr(ADDR_CONF_WIFI), mode);
-  #if !HAS_EEPROM && MCU_VARIANT == MCU_NRF52
-    // have to do a flush because we're only writing 1 byte and it syncs after 8
-    eeprom_flush();
-  #endif
+bool wr_conf_save(uint8_t mode) {
+  return eeprom_update(eeprom_addr(ADDR_CONF_WIFI), mode);
 }
 
-void bt_conf_save(bool is_enabled) {
-	if (is_enabled) {
-		eeprom_update(eeprom_addr(ADDR_CONF_BT), BT_ENABLE_BYTE);
-      #if !HAS_EEPROM && MCU_VARIANT == MCU_NRF52
-        // have to do a flush because we're only writing 1 byte and it syncs after 8
-        eeprom_flush();
-      #endif
-	} else {
-		eeprom_update(eeprom_addr(ADDR_CONF_BT), 0x00);
-    #if !HAS_EEPROM && MCU_VARIANT == MCU_NRF52
-      // have to do a flush because we're only writing 1 byte and it syncs after 8
-      eeprom_flush();
-    #endif
-	}
+bool bt_conf_save(bool is_enabled) {
+  if (!eeprom_update(eeprom_addr(ADDR_CONF_BT), is_enabled ? BT_ENABLE_BYTE : 0x00)) return false;
+  bt_enabled = is_enabled;
+  return true;
 }
 
 void di_conf_save(uint8_t dint) {

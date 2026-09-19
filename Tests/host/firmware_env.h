@@ -22,9 +22,11 @@
 #define MAJ_VERS 1
 #define MIN_VERS 86
 #define MODE_HOST 1
+#define WR_CHANNEL_DEFAULT 1
 #define WR_WIFI_OFF 0
 #define WR_WIFI_STA 1
 #define WR_WIFI_AP 2
+#define BT_STATE_OFF 0
 #define BT_STATE_ON 1
 #define BT_STATE_CONNECTED 3
 #define ADDR_CONF_SSID 0x00
@@ -35,7 +37,8 @@
 #include "Stolo.h"
 inline uint32_t fake_millis = 1000;
 inline uint32_t millis() { return fake_millis; }
-inline void delay(uint32_t) {}
+inline std::vector<std::string> calls;
+inline void delay(uint32_t n) { calls.push_back("delay:"+std::to_string(n)); }
 inline uint32_t lora_freq = 915000000, lora_bw = 125000;
 inline int lora_sf = 8, lora_cr = 5, lora_txp = 17, op_mode = 1;
 inline float st_airtime_limit = 0, lt_airtime_limit = 0;
@@ -47,10 +50,13 @@ inline char wr_ssid[33] = {}, wr_psk[33] = {};
 inline uint8_t bt_state = BT_STATE_ON; inline bool bt_allow_pairing = false, bt_enabled = true, ble_authenticated = false;
 inline int fake_bonds = 1;
 inline std::vector<uint8_t> out;
-inline std::vector<std::string> calls;
-inline void serial_write(uint8_t b) { out.push_back(b); }
+inline void serial_write(uint8_t b) { out.push_back(b); calls.push_back("serial_write"); }
 inline void escaped_serial_write(uint8_t b) { out.push_back(b); }
 #define NOOP(name) inline void name() { calls.push_back(#name); }
+inline void stolo_rescue_announce(uint8_t) { calls.push_back("rescue_announce"); }
+#ifndef STOLO_REAL_TRANSPORT_TEST
+NOOP(stolo_transport_drain)
+#endif
 NOOP(setFrequency) NOOP(setBandwidth) NOOP(setSpreadingFactor) NOOP(setCodingRate) NOOP(setTXPower)
 inline bool startRadio() { calls.push_back("startRadio"); return radio_online = true; }
 inline void stopRadio() { calls.push_back("stopRadio"); radio_online = false; }
@@ -59,16 +65,23 @@ NOOP(kiss_indicate_txpower) NOOP(kiss_indicate_st_alock) NOOP(kiss_indicate_lt_a
 struct EE { uint8_t bytes[1024] = {}; uint8_t read(int p) { return bytes[p]; } } inline EEPROM;
 inline int config_addr(int p) { return p; }
 inline int eeprom_addr(int p) { return 512 + p; }
-inline void eeprom_update(int p, uint8_t b) { EEPROM.bytes[p] = b; calls.push_back("eeprom_update"); }
-inline void wr_conf_save(uint8_t) { calls.push_back("wr_conf_save"); }
-NOOP(wifi_remote_init)
+inline int ee_write_count=0, ee_fail_call=-1;
+inline bool eeprom_update(int p, uint8_t b) { calls.push_back("eeprom_update"); if (++ee_write_count == ee_fail_call) return false; EEPROM.bytes[p] = b; return true; }
+inline bool wr_conf_save(uint8_t m) { calls.push_back("wr_conf_save"); return eeprom_update(700,m); }
+inline void wifi_remote_init() {
+  calls.push_back("wifi_remote_init"); memcpy(wr_ssid,EEPROM.bytes,33); memcpy(wr_psk,EEPROM.bytes+33,33);
+  wr_channel=EEPROM.bytes[eeprom_addr(ADDR_CONF_WCHN)]; wr_state=wifi_mode?1:0;
+}
 inline int esp_ble_get_bond_device_num() { return fake_bonds; }
 inline void bt_debond_all() { calls.push_back("bt_debond_all"); fake_bonds = 0; }
 inline void bt_enable_pairing() { bt_allow_pairing = true; calls.push_back("bt_enable_pairing"); }
 inline void bt_disable_pairing() { bt_allow_pairing = false; }
-inline void bt_start() { bt_enabled = true; calls.push_back("bt_start"); }
-inline void bt_stop() { bt_enabled = false; calls.push_back("bt_stop"); }
-inline void bt_conf_save(bool) {}
+inline void bt_start() { bt_state = BT_STATE_ON; calls.push_back("bt_start"); }
+inline void bt_stop() { bt_state = BT_STATE_OFF; calls.push_back("bt_stop"); }
+inline bool bt_conf_save(bool enabled) { if (!eeprom_update(701,enabled)) return false; bt_enabled=enabled; return true; }
+#ifndef STOLO_DISPATCH_TEST
+inline void stolo_parser_abort() {}
+#endif
 #include "StoloStore.h"
 #include "StoloProtocol.h"
 
@@ -82,12 +95,28 @@ inline int last_reply_type() { for (int i = (int)out.size() - 1; i >= 0; i--) if
 inline std::vector<uint8_t> last_body() { std::vector<uint8_t> b; if (out.size() < 6) return b; b.assign(out.begin() + 5, out.end() - 1); return b; }
 inline bool replied(uint8_t type) { return out.size() >= 5 && out[3] == type; }
 inline bool errored(uint8_t code) { return replied(SCP_ERROR) && out.size() >= 6 && out[5] == code; }
-// Drive a frame through the same three hooks the .ino parser calls.
+// Dispatcher suites drive the actual KISS byte stream; header-only suites
+// call the same SCP hooks directly. Neither replaces production handlers.
+#ifdef STOLO_DISPATCH_TEST
+void serial_callback(uint8_t);
+#endif
 inline void scp(uint8_t type, const std::vector<uint8_t>& body = {}, uint8_t seq = 1) {
-  reset_out(); stolo_scp_frame_begin();
-  stolo_scp_rx_byte(SCP_VERSION); stolo_scp_rx_byte(type); stolo_scp_rx_byte(seq);
-  for (auto b : body) stolo_scp_rx_byte(b);
-  stolo_scp_frame_end();
+  reset_out();
+  #ifdef STOLO_DISPATCH_TEST
+    serial_callback(FEND); serial_callback(CMD_STOLO);
+    std::vector<uint8_t> payload={SCP_VERSION,type,seq}; payload.insert(payload.end(),body.begin(),body.end());
+    for (auto b:payload) {
+      if (b==FEND) { serial_callback(FESC); serial_callback(TFEND); }
+      else if (b==FESC) { serial_callback(FESC); serial_callback(TFESC); }
+      else serial_callback(b);
+    }
+    serial_callback(FEND);
+  #else
+    stolo_scp_frame_begin();
+    stolo_scp_rx_byte(SCP_VERSION); stolo_scp_rx_byte(type); stolo_scp_rx_byte(seq);
+    for (auto b : body) stolo_scp_rx_byte(b);
+    stolo_scp_frame_end();
+  #endif
 }
 inline void as_source(uint8_t src) { stolo_note_source(src); }
 inline void boot_owned(uint32_t epoch = 7) {

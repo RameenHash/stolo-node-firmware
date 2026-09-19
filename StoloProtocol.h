@@ -47,6 +47,8 @@
 
 // Defined in RNode_Firmware.ino; Arduino's generated prototypes come after
 // this header is pulled in, so the ones this file calls are declared here.
+void stolo_transport_drain();
+void stolo_rescue_announce(uint8_t flashes);
 void setFrequency(); void setBandwidth(); void setSpreadingFactor();
 void setCodingRate(); void setTXPower(); bool startRadio(); void stopRadio();
 
@@ -58,6 +60,7 @@ void setCodingRate(); void setTXPower(); bool startRadio(); void stopRadio();
 #define SCP_AUTH          0x02
 #define SCP_ENROLL        0x03
 #define SCP_FORGET_OWNER  0x04
+#define SCP_RESCUE        0x05
 #define SCP_GET_RADIO     0x10
 #define SCP_SET_RADIO     0x11
 #define SCP_GET_WIFI      0x20
@@ -103,6 +106,7 @@ void setCodingRate(); void setTXPower(); bool startRadio(); void stopRadio();
 
 // An authenticated session that says nothing for this long is over.
 #define STOLO_SESSION_IDLE_MS 600000UL
+#define STOLO_USB_SESSION_IDLE_MS 30000UL
 
 // ── the band the provisioning ROM says this radio is built for ──────────
 // rnodeconf's own per-model table, transcribed for the models this fork
@@ -154,13 +158,18 @@ uint8_t  stolo_rx[STOLO_MSG_MAX];
 uint16_t stolo_rx_len = 0;
 bool     stolo_rx_overflow = false;
 uint32_t stolo_enroll_window_until = 0;
+volatile bool stolo_usb_boundary_pending = false;
 
 bool stolo_enroll_window_open() {
   return stolo_enroll_window_until != 0 && (int32_t)(stolo_enroll_window_until - millis()) > 0;
 }
 
 // A connection boundary: everything the previous host earned is gone.
+void stolo_parser_abort();  // .ino: parser and queued bytes share the session boundary
 void stolo_session_reset(uint8_t source) {
+  stolo_parser_abort();
+  stolo_rx_len = 0;
+  stolo_rx_overflow = false;
   stolo_conn_generation++;
   memset(&stolo_session, 0, sizeof(stolo_session));
   stolo_session.generation = stolo_conn_generation;
@@ -180,8 +189,23 @@ void stolo_host_disconnected() {
   stolo_session_reset(stolo_session.source);
 }
 
+// USB event task only posts a flag; parser/FIFO state belongs to the loop.
+void stolo_usb_connection_boundary() { __atomic_store_n(&stolo_usb_boundary_pending, true, __ATOMIC_RELEASE); }
+
+bool stolo_poll_session() {
+  bool boundary = __atomic_exchange_n(&stolo_usb_boundary_pending, false, __ATOMIC_ACQ_REL);
+  uint32_t timeout = stolo_session.source == STOLO_SRC_USB ? STOLO_USB_SESSION_IDLE_MS : STOLO_SESSION_IDLE_MS;
+  if ((boundary && stolo_session.source == STOLO_SRC_USB)
+      || (stolo_session.authorized && (uint32_t)(millis() - stolo_session.last_activity) > timeout)) {
+    stolo_host_disconnected();
+    return true;
+  }
+  return false;
+}
+
+bool stolo_host_is_present();
 bool stolo_is_owner() {
-  return stolo_session.authorized
+  return stolo_host_is_present() && !__atomic_load_n(&stolo_usb_boundary_pending, __ATOMIC_ACQUIRE) && stolo_store_ok && stolo_session.authorized
       && stolo_session.generation == stolo_conn_generation
       && stolo_cfg.owner_enrolled
       && stolo_session.auth_epoch == stolo_cfg.owner_epoch;
@@ -200,7 +224,8 @@ bool stolo_host_is_present() {
 
 uint8_t stolo_role() {
   if (stolo_is_owner()) return STOLO_ROLE_OWNER;
-  if (stolo_store_ok && !stolo_cfg.owner_enrolled && stolo_host_is_present()) return STOLO_ROLE_COMPAT;
+  if (STOLO_ENABLE_FACTORY_COMPAT && stolo_store_ok && !stolo_cfg.owner_enrolled
+      && !stolo_ever_enrolled() && stolo_host_is_present()) return STOLO_ROLE_COMPAT;
   return STOLO_ROLE_GUEST;
 }
 
@@ -267,16 +292,20 @@ void stolo_reply_hello(uint8_t seq) {
 
 // HELLO opens a session on THIS connection: fresh nonce, no authority.
 void stolo_handle_hello(uint8_t seq) {
-  stolo_random_fill(stolo_session.nonce, sizeof(stolo_session.nonce));
+  stolo_session_reset(stolo_session.source);
+  if (!stolo_random_fill(stolo_session.nonce, sizeof(stolo_session.nonce))) {
+    stolo_session_reset(stolo_session.source);
+    stolo_scp_error(seq, SCP_ERR_RECOVERY, "random generator unavailable"); return;
+  }
   stolo_session.nonce_live = true;
   stolo_session.authorized = false;
   stolo_session.hello_seen = true;
   stolo_reply_hello(seq);
 }
 
-void stolo_consume_nonce() {
+bool stolo_consume_nonce() {
   stolo_session.nonce_live = false;
-  stolo_random_fill(stolo_session.nonce, sizeof(stolo_session.nonce));
+  return stolo_random_fill(stolo_session.nonce, sizeof(stolo_session.nonce));
 }
 
 // AUTH body: sig[64] over
@@ -301,7 +330,7 @@ void stolo_handle_auth(uint8_t seq, const uint8_t* body, uint16_t len) {
   // The nonce that was signed is spent either way. A SUCCESSFUL auth issues
   // a fresh one in its reply, so the owner can go on to ENROLL (hand-over)
   // without a HELLO — which would drop the authority just earned.
-  stolo_consume_nonce();
+  ok = stolo_consume_nonce() && ok;
   stolo_session.authorized = ok;
   stolo_session.auth_epoch = stolo_cfg.owner_epoch;
   uint8_t reply[2 + 16]; uint16_t rn = 0;
@@ -346,12 +375,13 @@ void stolo_handle_enroll(uint8_t seq, const uint8_t* body, uint16_t len) {
   // Ownership changed: every session's authority is void, the window is
   // spent, and the previous owner's bonds are no longer presence.
   stolo_enroll_window_until = 0;
-  #if HAS_BLE
-    bt_debond_all();
-  #endif
   stolo_session_reset(stolo_session.source);
   uint8_t reply[5]; n = 0; reply[n++] = 1; put_u32(reply, &n, stolo_cfg.owner_epoch);
   stolo_scp_send(SCP_ENROLL | SCP_REPLY, seq, reply, n);
+  stolo_transport_drain();
+  #if HAS_BLE
+    bt_debond_all();
+  #endif
 }
 
 void stolo_handle_forget_owner(uint8_t seq) {
@@ -361,12 +391,34 @@ void stolo_handle_forget_owner(uint8_t seq) {
   next.owner_enrolled = 0;
   next.owner_epoch++;
   if (!stolo_store_commit(&next)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "store write failed"); return; }
-  #if HAS_BLE
-    bt_debond_all();
-  #endif
   stolo_session_reset(stolo_session.source);
   uint8_t reply[1] = {1};
   stolo_scp_send(SCP_FORGET_OWNER | SCP_REPLY, seq, reply, 1);
+  stolo_transport_drain();
+  #if HAS_BLE
+    bt_debond_all();
+  #endif
+}
+
+// Explicit destructive rescue: physical boot window AND unreadable store.
+// Confirmation token is deliberate UI intent, not a secret or authority key.
+void stolo_handle_rescue(uint8_t seq, const uint8_t* body, uint16_t len) {
+  if (stolo_store_ok || stolo_store_state != STOLO_STORE_RECOVERY || !stolo_enroll_window_open()) {
+    stolo_scp_error(seq, SCP_ERR_UNAUTHORIZED, "rescue needs RECOVERY and physical window"); return;
+  }
+  if (len != 6 || memcmp(body, "RESCUE", 6) != 0) {
+    stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "rescue replaces identity: send RESCUE"); return;
+  }
+  stolo_rescue_announce(6);
+  if (!stolo_store_rescue()) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "rescue incomplete: retry physical rescue"); return; }
+  stolo_enroll_window_until = 0;
+  stolo_session_reset(stolo_session.source);
+  uint8_t reply[33]; reply[0] = 1; memcpy(reply + 1, stolo_cfg.node_pub, 32);
+  stolo_scp_send(SCP_RESCUE | SCP_REPLY, seq, reply, sizeof(reply));
+  stolo_transport_drain();
+  #if HAS_BLE
+    bt_debond_all();
+  #endif
 }
 
 // ── radio ───────────────────────────────────────────────────────────────
@@ -440,21 +492,30 @@ void stolo_handle_set_radio(uint8_t seq, const uint8_t* body, uint16_t len) {
 
 // ── WiFi ────────────────────────────────────────────────────────────────
 // GET_WIFI reveals the SSID and connection state: owner and compat only.
-void stolo_reply_wifi(uint8_t seq, uint8_t type = SCP_GET_WIFI, uint8_t applied = 0) {
+// SET replies carry accepted configuration + pre-application runtime
+// observations + accepted mask + pending flags. GET returns effective state.
+#define SCP_PENDING_RUNTIME 0x01
+struct StoloWifiReply {
+  uint8_t mode, channel;
+  char ssid[33];
+  bool psk_set;
+};
+void stolo_reply_wifi(uint8_t seq, uint8_t type = SCP_GET_WIFI, uint8_t applied = 0,
+                      const StoloWifiReply* accepted = NULL, uint8_t pending = 0) {
   uint8_t body[64]; uint16_t n = 0;
   #if HAS_WIFI
-    body[n++] = 1;  // supported
-    // An unset EEPROM byte reads 0xFF; that is "off", not a mode.
-    body[n++] = (wifi_mode == WR_WIFI_STA || wifi_mode == WR_WIFI_AP) ? wifi_mode : WR_WIFI_OFF;
-    body[n++] = wr_channel;
-    uint8_t sl = strnlen(wr_ssid, 32); body[n++] = sl; memcpy(body + n, wr_ssid, sl); n += sl;
-    body[n++] = wr_psk[0] != 0 ? 1 : 0;
+    body[n++] = 1;
+    body[n++] = accepted ? accepted->mode : ((wifi_mode == WR_WIFI_STA || wifi_mode == WR_WIFI_AP) ? wifi_mode : WR_WIFI_OFF);
+    body[n++] = accepted ? accepted->channel : wr_channel;
+    const char* ssid = accepted ? accepted->ssid : wr_ssid;
+    uint8_t sl = strnlen(ssid, 32); body[n++] = sl; memcpy(body + n, ssid, sl); n += sl;
+    body[n++] = accepted ? accepted->psk_set : wr_psk[0] != 0;
     body[n++] = wr_state;
     put_u32(body, &n, (uint32_t)wr_device_ip);
   #else
-    body[n++] = 0;  // not supported
+    body[n++] = 0;
   #endif
-  if (type != SCP_GET_WIFI) body[n++] = applied;
+  if (type != SCP_GET_WIFI) { body[n++] = applied; body[n++] = pending; }
   stolo_scp_send(type | SCP_REPLY, seq, body, n);
 }
 
@@ -464,7 +525,7 @@ void stolo_handle_set_wifi(uint8_t seq, const uint8_t* body, uint16_t len) {
   if (!stolo_may_configure()) { stolo_scp_error(seq, stolo_store_ok ? SCP_ERR_UNAUTHORIZED : SCP_ERR_RECOVERY, "authenticate first"); return; }
   #if HAS_WIFI
     if (!stolo_tlv_wellformed(seq, body, len, "set_wifi: malformed TLV")) return;
-    uint8_t mode = wifi_mode; bool has_mode = false;
+    uint8_t mode = (wifi_mode == WR_WIFI_STA || wifi_mode == WR_WIFI_AP) ? wifi_mode : WR_WIFI_OFF; bool has_mode = false;
     const uint8_t* ssid = NULL; uint8_t ssid_len = 0; bool has_ssid = false;
     const uint8_t* psk = NULL;  uint8_t psk_len = 0;  bool has_psk = false;
     uint8_t chn = 0; bool has_chn = false; uint8_t applied = 0;
@@ -475,10 +536,10 @@ void stolo_handle_set_wifi(uint8_t seq, const uint8_t* body, uint16_t len) {
           if (l != 1 || (v[0] != WR_WIFI_OFF && v[0] != WR_WIFI_STA && v[0] != WR_WIFI_AP)) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_wifi: bad mode"); return; }
           mode = v[0]; has_mode = true; break;
         case SCP_W_SSID:
-          if (l > 32) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_wifi: SSID over 32 bytes"); return; }
+          if (l > 32 || memchr(v, 0, l) || memchr(v, 0xFF, l)) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_wifi: invalid SSID bytes/length"); return; }
           ssid = v; ssid_len = l; has_ssid = true; break;
         case SCP_W_PSK:
-          if (l > 32) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_wifi: passphrase over 32 bytes"); return; }
+          if (l > 32 || memchr(v, 0, l) || memchr(v, 0xFF, l)) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_wifi: invalid passphrase bytes/length"); return; }
           psk = v; psk_len = l; has_psk = true; break;
         case SCP_W_CHN:
           if (l != 1 || v[0] < 1 || v[0] > 14) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_wifi: channel 1-14"); return; }
@@ -487,17 +548,29 @@ void stolo_handle_set_wifi(uint8_t seq, const uint8_t* body, uint16_t len) {
       }
       if (tag >= 1 && tag <= 4) applied |= (1 << (tag - 1));
     }
-    if (has_ssid) for (uint8_t k = 0; k < 33; k++) eeprom_update(config_addr(ADDR_CONF_SSID + k), k < ssid_len ? ssid[k] : 0x00);
-    if (has_psk)  for (uint8_t k = 0; k < 33; k++) eeprom_update(config_addr(ADDR_CONF_PSK + k), k < psk_len ? psk[k] : 0x00);
-    if (has_chn)  eeprom_update(eeprom_addr(ADDR_CONF_WCHN), chn);
-    // Same sequence as CMD_WIFI_MODE: persist, then (re)start, which
-    // re-reads SSID, PSK and channel from the EEPROM config block. The
-    // reply goes out BEFORE the restart so a WiFi-carried request still
-    // gets its answer; the restart is the last thing that happens.
-    wr_conf_save(mode);
-    wifi_mode = mode;
+    StoloWifiReply accepted = {};
+    accepted.mode = mode;
+    accepted.channel = has_chn ? chn : EEPROM.read(eeprom_addr(ADDR_CONF_WCHN));
+    if (accepted.channel < 1 || accepted.channel > 14) accepted.channel = WR_CHANNEL_DEFAULT;
+    // Unspecified fields also come from the next EEPROM image, not stale
+    // runtime caches (WiFi may never have started, or a prior write failed).
+    for (uint8_t k = 0; k < 32; ++k) {
+      uint8_t b = EEPROM.read(config_addr(ADDR_CONF_SSID + k));
+      accepted.ssid[k] = b == 0xFF ? 0 : b;
+    }
+    uint8_t saved_psk = EEPROM.read(config_addr(ADDR_CONF_PSK));
+    accepted.psk_set = has_psk ? psk_len != 0 : (saved_psk != 0 && saved_psk != 0xFF);
+    if (has_ssid) { memset(accepted.ssid, 0, sizeof(accepted.ssid)); memcpy(accepted.ssid, ssid, ssid_len); }
+    // EEPROM is per-byte checked persistence, not a multi-field transaction.
+    // Stop on the first failed commit; earlier bytes can already be durable.
+    if (has_ssid) for (uint8_t k = 0; k < 33; k++) if (!eeprom_update(config_addr(ADDR_CONF_SSID + k), k < ssid_len ? ssid[k] : 0x00)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "wifi: partial persistence possible"); return; }
+    if (has_psk) for (uint8_t k = 0; k < 33; k++) if (!eeprom_update(config_addr(ADDR_CONF_PSK + k), k < psk_len ? psk[k] : 0x00)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "wifi: partial persistence possible"); return; }
+    if (has_chn && !eeprom_update(eeprom_addr(ADDR_CONF_WCHN), chn)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "wifi: partial persistence possible"); return; }
+    if (!wr_conf_save(mode)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "wifi: partial persistence possible"); return; }
     (void)has_mode;
-    stolo_reply_wifi(seq, SCP_SET_WIFI, applied);
+    stolo_reply_wifi(seq, SCP_SET_WIFI, applied, &accepted, SCP_PENDING_RUNTIME);
+    stolo_transport_drain();
+    wifi_mode = mode;
     wifi_remote_init();
   #else
     stolo_scp_error(seq, SCP_ERR_NOT_SUPPORTED, "no WiFi on this board");
@@ -506,19 +579,21 @@ void stolo_handle_set_wifi(uint8_t seq, const uint8_t* body, uint16_t len) {
 
 // ── Bluetooth ───────────────────────────────────────────────────────────
 // GET_BT reveals bond and pairing state: owner and compat only.
-void stolo_reply_bt(uint8_t seq, uint8_t type = SCP_GET_BT, uint8_t applied = 0) {
-  uint8_t body[8]; uint16_t n = 0;
+struct StoloBtReply { bool enabled, pairing; uint8_t bonds; };
+void stolo_reply_bt(uint8_t seq, uint8_t type = SCP_GET_BT, uint8_t applied = 0,
+                    const StoloBtReply* accepted = NULL, uint8_t pending = 0) {
+  uint8_t body[9]; uint16_t n = 0;
   #if HAS_BLE
-    body[n++] = 1;  // supported
-    body[n++] = bt_state;
-    body[n++] = (uint8_t)esp_ble_get_bond_device_num();
-    body[n++] = bt_allow_pairing ? 1 : 0;
+    body[n++] = 1;
+    body[n++] = bt_state; // runtime observation before any pending actions
+    body[n++] = accepted ? accepted->bonds : (uint8_t)esp_ble_get_bond_device_num();
+    body[n++] = accepted ? accepted->pairing : bt_allow_pairing;
     put_u16(body, &n, stolo_cfg.bt_window_s);
-    body[n++] = bt_enabled ? 1 : 0;
+    body[n++] = accepted ? accepted->enabled : bt_state != BT_STATE_OFF;
   #else
-    body[n++] = 0;  // not supported
+    body[n++] = 0;
   #endif
-  if (type != SCP_GET_BT) body[n++] = applied;
+  if (type != SCP_GET_BT) { body[n++] = applied; body[n++] = pending; }
   stolo_scp_send(type | SCP_REPLY, seq, body, n);
 }
 
@@ -533,28 +608,36 @@ void stolo_handle_set_bt(uint8_t seq, const uint8_t* body, uint16_t len) {
     for (uint16_t i = 0; i + 2 <= len; i += 2 + body[i + 1]) {
       uint8_t tag = body[i], l = body[i + 1]; const uint8_t* v = body + i + 2;
       switch (tag) {
-        case SCP_B_PAIRING: if (l != 1) goto bad; has_pairing = true; pairing = v[0] != 0; break;
-        case SCP_B_DEBOND:  if (l != 1) goto bad; debond = v[0] != 0; break;
+        case SCP_B_PAIRING: if (l != 1) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_bt: bad TLV length"); return; } has_pairing = true; pairing = v[0] != 0; break;
+        case SCP_B_DEBOND:  if (l != 1) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_bt: bad TLV length"); return; } debond = v[0] != 0; break;
         case SCP_B_WINDOW: {
-          if (l != 2) goto bad; window = get_u16(v);
+          if (l != 2) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_bt: bad TLV length"); return; } window = get_u16(v);
           if (window < 10 || window > 600) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_bt: window 10-600 s"); return; }
           has_window = true; break; }
-        case SCP_B_ENABLED: if (l != 1) goto bad; has_enabled = true; enabled = v[0] != 0; break;
+        case SCP_B_ENABLED: if (l != 1) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_bt: bad TLV length"); return; } has_enabled = true; enabled = v[0] != 0; break;
         default: break;
       }
       if (tag >= 1 && tag <= 4) applied |= (1 << (tag - 1));
+    }
+    if (has_pairing && pairing && ((has_enabled && !enabled) || bt_state == BT_STATE_CONNECTED)) {
+      stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "pairing requires enabled, disconnected BLE"); return;
     }
     if (has_window) {
       StoloConfig next = stolo_cfg; next.bt_window_s = window;
       if (!stolo_store_commit(&next)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "store write failed"); return; }
     }
-    if (has_pairing) { if (pairing) { if (bt_state != BT_STATE_CONNECTED) bt_enable_pairing(); } else { bt_disable_pairing(); } }
-    stolo_reply_bt(seq, SCP_SET_BT, applied);
-    // Link-ending actions last, after the reply has been written.
-    if (has_enabled) { if (enabled) { bt_start(); bt_conf_save(true); } else { bt_conf_save(false); bt_stop(); } }
+    if (has_enabled && !bt_conf_save(enabled)) { stolo_scp_error(seq, SCP_ERR_STORE_FAILED, "bt: partial persistence possible"); return; }
+    StoloBtReply accepted = {has_enabled ? enabled : bt_state != BT_STATE_OFF,
+                            has_pairing ? pairing : bt_allow_pairing,
+                            debond ? (uint8_t)0 : (uint8_t)esp_ble_get_bond_device_num()};
+    if (has_enabled && !enabled) accepted.pairing = false;
+    uint8_t pending = (has_enabled || has_pairing || debond) ? SCP_PENDING_RUNTIME : 0;
+    stolo_reply_bt(seq, SCP_SET_BT, applied, &accepted, pending);
+    if (pending) stolo_transport_drain();
+    if (has_enabled) { if (enabled) bt_start(); else bt_stop(); }
+    if (has_pairing) { if (pairing) bt_enable_pairing(); else bt_disable_pairing(); }
     if (debond) bt_debond_all();
     return;
-    bad: stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "set_bt: bad TLV length");
   #else
     stolo_scp_error(seq, SCP_ERR_NOT_SUPPORTED, "no BLE on this board");
   #endif
@@ -575,11 +658,17 @@ void stolo_scp_rx_byte(uint8_t b) {
 }
 
 void stolo_scp_frame_end() {
+  if (stolo_poll_session()) return;
   stolo_session.last_activity = millis();
   if (stolo_rx_overflow || stolo_rx_len < 3) { stolo_scp_error(0, SCP_ERR_BAD_REQUEST, "malformed SCP frame"); return; }
   uint8_t ver = stolo_rx[0], type = stolo_rx[1], seq = stolo_rx[2];
   const uint8_t* body = stolo_rx + 3; uint16_t len = stolo_rx_len - 3;
   if (ver != SCP_VERSION) { stolo_scp_error(seq, SCP_ERR_NOT_SUPPORTED, "SCP version 2 required"); return; }
+  // Raw WiFi KISS is not a protected control carrier. Only public reads
+  // may use it. BLE administration requires the encrypted/bonded link.
+  if (type != SCP_HELLO && type != SCP_GET_RADIO && type != SCP_GET_FAULTS && !stolo_host_is_present()) {
+    stolo_scp_error(seq, SCP_ERR_NOT_SUPPORTED, "control requires USB or encrypted BLE"); return;
+  }
   if (type != SCP_HELLO && !stolo_session.hello_seen) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "say hello first"); return; }
   bool privileged = stolo_role() != STOLO_ROLE_GUEST;
   switch (type) {
@@ -587,6 +676,7 @@ void stolo_scp_frame_end() {
     case SCP_AUTH:         stolo_handle_auth(seq, body, len); break;
     case SCP_ENROLL:       stolo_handle_enroll(seq, body, len); break;
     case SCP_FORGET_OWNER: stolo_handle_forget_owner(seq); break;
+    case SCP_RESCUE:       stolo_handle_rescue(seq, body, len); break;
     case SCP_GET_RADIO:    stolo_reply_radio(seq); break;
     case SCP_SET_RADIO:    stolo_handle_set_radio(seq, body, len); break;
     case SCP_GET_WIFI:     if (privileged) stolo_reply_wifi(seq); else stolo_scp_error(seq, SCP_ERR_UNAUTHORIZED, "authenticate first"); break;
@@ -606,8 +696,8 @@ void stolo_scp_frame_end() {
 // validator would pass; everything else — including the config-area and
 // ROM dumps that carry the WiFi credential — is dropped (review F2).
 bool stolo_kiss_gate(uint8_t cmd) {
+  if (stolo_poll_session()) return false;
   stolo_session.last_activity = millis();
-  if (cmd == CMD_LEAVE || cmd == CMD_RESET) stolo_host_disconnected();   // the host is ending this connection
   if (stolo_role() != STOLO_ROLE_GUEST) return true;
   switch (cmd) {
     // Data and session plumbing
@@ -616,7 +706,7 @@ bool stolo_kiss_gate(uint8_t cmd) {
     case CMD_STAT_RX: case CMD_STAT_TX: case CMD_STAT_RSSI: case CMD_STAT_SNR: case CMD_STAT_CHTM:
     case CMD_STAT_PHYPRM: case CMD_STAT_BAT: case CMD_STAT_CSMA: case CMD_STAT_TEMP:
     // Identity reads (public provenance, no secrets)
-    case CMD_FW_VERSION: case CMD_PLATFORM: case CMD_MCU: case CMD_BOARD: case CMD_HASHES: case CMD_DEV_HASH: case CMD_DEV_SIG:
+    case CMD_FW_VERSION: case CMD_PLATFORM: case CMD_MCU: case CMD_BOARD: case CMD_HASHES: case CMD_DEV_HASH:
     case CMD_RANDOM: case CMD_BLINK:
       return true;
     // Radio parameters: a guest's read (value 0 / 0xFF) and a guest's write
@@ -657,7 +747,7 @@ void stolo_setup() {
     pinMode(pin_btn_usr1, INPUT_PULLUP);
     uint32_t held_since = millis();
     while (digitalRead(pin_btn_usr1) == LOW) {
-      if (millis() - held_since > 3000) { stolo_enroll_window_until = millis() + 60000; break; }
+      if (millis() - held_since > 3000) { stolo_enroll_window_until = millis() + 60000; stolo_rescue_announce(3); break; }
       delay(10);
     }
   #endif
@@ -665,9 +755,7 @@ void stolo_setup() {
 
 void stolo_update() {
   if (stolo_enroll_window_until != 0 && !stolo_enroll_window_open()) stolo_enroll_window_until = 0;
-  if (stolo_session.authorized && (uint32_t)(millis() - stolo_session.last_activity) > STOLO_SESSION_IDLE_MS) {
-    stolo_session_reset(stolo_session.source);
-  }
+  stolo_poll_session();
 }
 
 #endif
