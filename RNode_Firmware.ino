@@ -25,10 +25,28 @@
   #define STOLO_NOTE_SOURCE(src)    stolo_note_source(src)
   #define STOLO_FREQ_WRITE_OK(f)    stolo_kiss_freq_write(f)
   #define STOLO_TXP_WRITE_OK(p)     stolo_kiss_txp_write(p)
+  #define STOLO_MAY_MUTATE()        stolo_may_configure()
+  #define STOLO_END_SESSION()       stolo_host_disconnected()
+  #define STOLO_DRAIN_TRANSPORT()    stolo_transport_drain()
 #else
   #define STOLO_NOTE_SOURCE(src)    ((void)0)
   #define STOLO_FREQ_WRITE_OK(f)    true
   #define STOLO_TXP_WRITE_OK(p)     true
+  #define STOLO_MAY_MUTATE()        true
+  #define STOLO_END_SESSION()       ((void)0)
+  #define STOLO_DRAIN_TRANSPORT()    ((void)0)
+#endif
+
+#if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32 && ARDUINO_USB_CDC_ON_BOOT
+void stolo_usb_event(void*, esp_event_base_t, int32_t event, void* data) {
+  #if ARDUINO_USB_MODE
+    // Hardware CDC/JTAG has bus events, but no reliable process-close event.
+    if (event == ARDUINO_HW_CDC_CONNECTED_EVENT || event == ARDUINO_HW_CDC_BUS_RESET_EVENT) stolo_usb_connection_boundary();
+  #else
+    if (event == ARDUINO_USB_CDC_CONNECTED_EVENT || event == ARDUINO_USB_CDC_DISCONNECTED_EVENT
+        || (event == ARDUINO_USB_CDC_LINE_STATE_EVENT && !((arduino_usb_cdc_event_data_t*)data)->line_state.dtr)) stolo_usb_connection_boundary();
+  #endif
+}
 #endif
 
 FIFOBuffer serialFIFO;
@@ -46,6 +64,9 @@ volatile uint8_t queue_height = 0;
 volatile uint16_t queued_bytes = 0;
 volatile uint16_t queue_cursor = 0;
 volatile uint16_t current_packet_start = 0;
+#if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+  uint16_t stolo_partial_data_bytes = 0;
+#endif
 volatile bool serial_buffering = false;
 #if HAS_BLUETOOTH || HAS_BLE == true
   bool bt_init_ran = false;
@@ -133,6 +154,9 @@ void setup() {
   memset(serialBuffer, 0, sizeof(serialBuffer));
   fifo_init(&serialFIFO, serialBuffer, CONFIG_UART_BUFFER_SIZE);
 
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32 && ARDUINO_USB_CDC_ON_BOOT
+    Serial.onEvent(stolo_usb_event);
+  #endif
   Serial.begin(serial_baudrate);
 
   #if HAS_NP
@@ -156,14 +180,14 @@ void setup() {
   // Configure input and output pins
   #if HAS_INPUT
     input_init();
-    #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
-      stolo_setup();
-    #endif
   #endif
 
   #if HAS_NP == false
     pinMode(pin_led_rx, OUTPUT);
     pinMode(pin_led_tx, OUTPUT);
+  #endif
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    stolo_setup();
   #endif
 
   #if HAS_TCXO == true
@@ -787,7 +811,53 @@ void transmit(uint16_t size) {
   } else { kiss_indicate_error(ERROR_TXFAILED); led_indicate_error(5); }
 }
 
+#if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+void stolo_rescue_announce(uint8_t flashes) { led_indicate_info(flashes); }
+
+void stolo_transport_drain() {
+  #if HAS_BLE
+    if (stolo_session.source == STOLO_SRC_BLE) {
+      bt_flush();
+      // BLE notify has no peer acknowledgement in this API. Give the
+      // controller a bounded transmit grace period; bench delivery is pending.
+      delay(100);
+      return;
+    }
+  #endif
+  #if HAS_WIFI
+    if (stolo_session.source == STOLO_SRC_WIFI) { connection.flush(); return; }
+  #endif
+  Serial.flush();
+}
+#endif
+
+#if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+void stolo_parser_abort() {
+  command = CMD_UNKNOWN;
+  frame_len = 0;
+  IN_FRAME = false;
+  ESCAPE = false;
+  queued_bytes -= stolo_partial_data_bytes;
+  stolo_partial_data_bytes = 0;
+  queue_cursor = current_packet_start;
+  fifo_flush(&serialFIFO);
+}
+#endif
+
+// All producers use this boundary before enqueueing a byte. A source
+// transition flushes the old FIFO before any new-source byte is admitted.
+void stolo_buffer_byte(uint8_t source, uint8_t byte) {
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    if (stolo_poll_session()) return;
+  #endif
+  STOLO_NOTE_SOURCE(source);
+  if (!fifo_isfull(&serialFIFO)) fifo_push(&serialFIFO, byte);
+}
+
 void serial_callback(uint8_t sbyte) {
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    if (stolo_poll_session()) return;
+  #endif
   if (IN_FRAME && sbyte == FEND && command == CMD_DATA) {
     IN_FRAME = false;
 
@@ -804,6 +874,9 @@ void serial_callback(uint8_t sbyte) {
             fifo16_push(&packet_starts, s);
             fifo16_push(&packet_lengths, l);
             current_packet_start = queue_cursor;
+            #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+              stolo_partial_data_bytes = 0;
+            #endif
         }
     }
 
@@ -814,6 +887,7 @@ void serial_callback(uint8_t sbyte) {
     IN_FRAME = true;
     command = CMD_UNKNOWN;
     frame_len = 0;
+    ESCAPE = false;
   } else if (IN_FRAME && frame_len < MTU) {
     // Have a look at the command byte first
     if (frame_len == 0 && command == CMD_UNKNOWN) {
@@ -831,6 +905,8 @@ void serial_callback(uint8_t sbyte) {
       }
     } else if (command == CMD_STOLO_DROP) {
       // A mutation the session gate refused: the rest of the frame is discarded.
+    } else if (!stolo_kiss_gate(command)) {
+      command = CMD_STOLO_DROP;
     #endif
     } else if (command == CMD_DATA) {
         if (bt_state != BT_STATE_CONNECTED) {
@@ -846,11 +922,15 @@ void serial_callback(uint8_t sbyte) {
             }
             if (queue_height < CONFIG_QUEUE_MAX_LENGTH && queued_bytes < CONFIG_QUEUE_SIZE) {
               queued_bytes++;
+              #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+                stolo_partial_data_bytes++;
+              #endif
               packet_queue[queue_cursor++] = sbyte;
               if (queue_cursor == CONFIG_QUEUE_SIZE) queue_cursor = 0;
             }
         }
     } else if (command == CMD_FREQUENCY) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
             ESCAPE = true;
         } else {
@@ -868,12 +948,14 @@ void serial_callback(uint8_t sbyte) {
           if (freq == 0) {
             kiss_indicate_frequency();
           } else if (STOLO_FREQ_WRITE_OK(freq)) {
+            if (!STOLO_MAY_MUTATE()) return;
             lora_freq = freq;
             if (op_mode == MODE_HOST) setFrequency();
             kiss_indicate_frequency();
           }
         }
     } else if (command == CMD_BANDWIDTH) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
             ESCAPE = true;
         } else {
@@ -891,12 +973,14 @@ void serial_callback(uint8_t sbyte) {
           if (bw == 0) {
             kiss_indicate_bandwidth();
           } else {
+            if (!STOLO_MAY_MUTATE()) return;
             lora_bw = bw;
             if (op_mode == MODE_HOST) setBandwidth();
             kiss_indicate_bandwidth();
           }
         }
     } else if (command == CMD_TXPOWER) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == 0xFF) {
         kiss_indicate_txpower();
       } else {
@@ -919,6 +1003,7 @@ void serial_callback(uint8_t sbyte) {
 
         if (STOLO_TXP_WRITE_OK(txp)) {
 
+          if (!STOLO_MAY_MUTATE()) return;
           lora_txp = txp;
 
           if (op_mode == MODE_HOST) setTXPower();
@@ -928,6 +1013,7 @@ void serial_callback(uint8_t sbyte) {
         }
       }
     } else if (command == CMD_SF) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == 0xFF) {
         kiss_indicate_spreadingfactor();
       } else {
@@ -935,11 +1021,13 @@ void serial_callback(uint8_t sbyte) {
         if (sf < 5) sf = 5;
         if (sf > 12) sf = 12;
 
+        if (!STOLO_MAY_MUTATE()) return;
         lora_sf = sf;
         if (op_mode == MODE_HOST) setSpreadingFactor();
         kiss_indicate_spreadingfactor();
       }
     } else if (command == CMD_CR) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == 0xFF) {
         kiss_indicate_codingrate();
       } else {
@@ -947,23 +1035,28 @@ void serial_callback(uint8_t sbyte) {
         if (cr < 5) cr = 5;
         if (cr > 8) cr = 8;
 
+        if (!STOLO_MAY_MUTATE()) return;
         lora_cr = cr;
         if (op_mode == MODE_HOST) setCodingRate();
         kiss_indicate_codingrate();
       }
     } else if (command == CMD_IMPLICIT) {
+      if (!STOLO_MAY_MUTATE()) return;
       set_implicit_length(sbyte);
       kiss_indicate_implicit_length();
     } else if (command == CMD_LEAVE) {
       if (sbyte == 0xFF) {
+        if (!STOLO_MAY_MUTATE()) { STOLO_END_SESSION(); return; }
         display_unblank();
         cable_state   = CABLE_STATE_DISCONNECTED;
         current_rssi  = -292;
         last_rssi     = -292;
         last_rssi_raw = 0x00;
         last_snr_raw  = 0x80;
+        STOLO_END_SESSION();
       }
     } else if (command == CMD_RADIO_STATE) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (bt_state != BT_STATE_CONNECTED) {
         cable_state = CABLE_STATE_CONNECTED;
         display_unblank();
@@ -978,6 +1071,7 @@ void serial_callback(uint8_t sbyte) {
         kiss_indicate_radiostate();
       }
     } else if (command == CMD_ST_ALOCK) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
             ESCAPE = true;
         } else {
@@ -990,6 +1084,7 @@ void serial_callback(uint8_t sbyte) {
         }
 
         if (frame_len == 2) {
+          if (!STOLO_MAY_MUTATE()) return;
           uint16_t at = (uint16_t)cmdbuf[0] << 8 | (uint16_t)cmdbuf[1];
 
           if (at == 0) {
@@ -1001,6 +1096,7 @@ void serial_callback(uint8_t sbyte) {
           kiss_indicate_st_alock();
         }
     } else if (command == CMD_LT_ALOCK) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
             ESCAPE = true;
         } else {
@@ -1013,6 +1109,7 @@ void serial_callback(uint8_t sbyte) {
         }
 
         if (frame_len == 2) {
+          if (!STOLO_MAY_MUTATE()) return;
           uint16_t at = (uint16_t)cmdbuf[0] << 8 | (uint16_t)cmdbuf[1];
 
           if (at == 0) {
@@ -1030,6 +1127,7 @@ void serial_callback(uint8_t sbyte) {
     } else if (command == CMD_STAT_RSSI) {
       kiss_indicate_stat_rssi();
     } else if (command == CMD_RADIO_LOCK) {
+      if (!STOLO_MAY_MUTATE()) return;
       update_radio_lock();
       kiss_indicate_radio_lock();
     } else if (command == CMD_BLINK) {
@@ -1042,6 +1140,7 @@ void serial_callback(uint8_t sbyte) {
         kiss_indicate_detect();
       }
     } else if (command == CMD_PROMISC) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == 0x01) {
         promisc_enable();
       } else if (sbyte == 0x00) {
@@ -1055,18 +1154,22 @@ void serial_callback(uint8_t sbyte) {
         kiss_indicate_not_ready();
       }
     } else if (command == CMD_UNLOCK_ROM) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == ROM_UNLOCK_BYTE) {
         unlock_rom();
       }
     } else if (command == CMD_RESET) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == CMD_RESET_BYTE) {
         hard_reset();
+        STOLO_END_SESSION(); // hard_reset normally restarts; clear if it returns
       }
     } else if (command == CMD_ROM_READ) {
       kiss_dump_eeprom();
     } else if (command == CMD_CFG_READ) {
       kiss_dump_config();
     } else if (command == CMD_ROM_WRITE) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
             ESCAPE = true;
         } else {
@@ -1079,6 +1182,7 @@ void serial_callback(uint8_t sbyte) {
         }
 
         if (frame_len == 2) {
+          if (!STOLO_MAY_MUTATE()) return;
           eeprom_write(cmdbuf[0], cmdbuf[1]);
         }
     } else if (command == CMD_FW_VERSION) {
@@ -1090,10 +1194,13 @@ void serial_callback(uint8_t sbyte) {
     } else if (command == CMD_BOARD) {
       kiss_indicate_board();
     } else if (command == CMD_CONF_SAVE) {
+      if (!STOLO_MAY_MUTATE()) return;
       eeprom_conf_save();
     } else if (command == CMD_CONF_DELETE) {
+      if (!STOLO_MAY_MUTATE()) return;
       eeprom_conf_delete();
     } else if (command == CMD_FB_EXT) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_DISPLAY == true
         if (sbyte == 0xFF) {
           kiss_indicate_fbstate();
@@ -1106,6 +1213,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_FB_WRITE) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
             ESCAPE = true;
         } else {
@@ -1135,6 +1243,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_DEV_SIG) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if MCU_VARIANT == MCU_ESP32 || MCU_VARIANT == MCU_NRF52
         if (sbyte == FESC) {
               ESCAPE = true;
@@ -1148,11 +1257,13 @@ void serial_callback(uint8_t sbyte) {
           }
 
           if (frame_len == DEV_SIG_LEN) {
+            if (!STOLO_MAY_MUTATE()) return;
             memcpy(dev_sig, cmdbuf, DEV_SIG_LEN);
             device_save_signature();
           }
       #endif
     } else if (command == CMD_FW_UPD) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == 0x01) {
         firmware_update_mode = true;
       } else {
@@ -1171,6 +1282,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_FW_HASH) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if MCU_VARIANT == MCU_ESP32 || MCU_VARIANT == MCU_NRF52
         if (sbyte == FESC) {
               ESCAPE = true;
@@ -1184,23 +1296,29 @@ void serial_callback(uint8_t sbyte) {
           }
 
           if (frame_len == DEV_HASH_LEN) {
+            if (!STOLO_MAY_MUTATE()) return;
             memcpy(dev_firmware_hash_target, cmdbuf, DEV_HASH_LEN);
             device_save_firmware_hash();
           }
       #endif
     } else if (command == CMD_WIFI_CHN) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_WIFI
         if (sbyte > 0 && sbyte < 14) { eeprom_update(eeprom_addr(ADDR_CONF_WCHN), sbyte); }
       #endif
     } else if (command == CMD_WIFI_MODE) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_WIFI
         if (sbyte == WR_WIFI_OFF || sbyte == WR_WIFI_STA || sbyte == WR_WIFI_AP) {
-          wr_conf_save(sbyte);
+          if (!wr_conf_save(sbyte)) return;
+          STOLO_DRAIN_TRANSPORT();
+          if (!STOLO_MAY_MUTATE()) return;
           wifi_mode = sbyte;
           wifi_remote_init();
         }
       #endif
     } else if (command == CMD_WIFI_SSID) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_WIFI
         if (sbyte == FESC) { ESCAPE = true; }
         else {
@@ -1214,12 +1332,14 @@ void serial_callback(uint8_t sbyte) {
 
         if (sbyte == 0x00) {
           for (uint8_t i = 0; i<33; i++) {
+            if (!STOLO_MAY_MUTATE()) return;
             if (i<frame_len && i<32) { eeprom_update(config_addr(ADDR_CONF_SSID+i), cmdbuf[i]); }
             else                     { eeprom_update(config_addr(ADDR_CONF_SSID+i), 0x00); }
           }
         }
       #endif
     } else if (command == CMD_WIFI_PSK) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_WIFI
         if (sbyte == FESC) { ESCAPE = true; }
         else {
@@ -1233,12 +1353,14 @@ void serial_callback(uint8_t sbyte) {
 
         if (sbyte == 0x00) {
           for (uint8_t i = 0; i<33; i++) {
+            if (!STOLO_MAY_MUTATE()) return;
             if (i<frame_len && i<32) { eeprom_update(config_addr(ADDR_CONF_PSK+i), cmdbuf[i]); }
             else                     { eeprom_update(config_addr(ADDR_CONF_PSK+i), 0x00); }
           }
         }
       #endif
     } else if (command == CMD_WIFI_IP) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_WIFI
         if (sbyte == FESC) { ESCAPE = true; }
         else {
@@ -1250,9 +1372,10 @@ void serial_callback(uint8_t sbyte) {
           if (frame_len < CMD_L) cmdbuf[frame_len++] = sbyte;
         }
 
-        if (frame_len == 4) { for (uint8_t i = 0; i<4; i++) { eeprom_update(config_addr(ADDR_CONF_IP+i), cmdbuf[i]); } }
+        if (frame_len == 4) { for (uint8_t i = 0; i<4; i++) { if (!STOLO_MAY_MUTATE()) return; eeprom_update(config_addr(ADDR_CONF_IP+i), cmdbuf[i]); } }
       #endif
     } else if (command == CMD_WIFI_NM) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_WIFI
         if (sbyte == FESC) { ESCAPE = true; }
         else {
@@ -1264,13 +1387,16 @@ void serial_callback(uint8_t sbyte) {
           if (frame_len < CMD_L) cmdbuf[frame_len++] = sbyte;
         }
 
-        if (frame_len == 4) { for (uint8_t i = 0; i<4; i++) { eeprom_update(config_addr(ADDR_CONF_NM+i), cmdbuf[i]); } }
+        if (frame_len == 4) { for (uint8_t i = 0; i<4; i++) { if (!STOLO_MAY_MUTATE()) return; eeprom_update(config_addr(ADDR_CONF_NM+i), cmdbuf[i]); } }
       #endif
     } else if (command == CMD_BT_CTRL) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_BLUETOOTH || HAS_BLE
         if (sbyte == 0x00) {
+          if (!bt_conf_save(false)) return;
+          STOLO_DRAIN_TRANSPORT();
+          if (!STOLO_MAY_MUTATE()) return;
           bt_stop();
-          bt_conf_save(false);
         } else if (sbyte == 0x01) {
           bt_start();
           bt_conf_save(true);
@@ -1285,10 +1411,12 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_BT_UNPAIR) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_BLE
-        if (sbyte == 0x01) { bt_debond_all(); }
+        if (sbyte == 0x01) { STOLO_DRAIN_TRANSPORT(); if (!STOLO_MAY_MUTATE()) return; bt_debond_all(); }
       #endif
     } else if (command == CMD_DISP_INT) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_DISPLAY
         if (sbyte == FESC) {
             ESCAPE = true;
@@ -1304,6 +1432,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_DISP_ADDR) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_DISPLAY
         if (sbyte == FESC) {
             ESCAPE = true;
@@ -1319,6 +1448,7 @@ void serial_callback(uint8_t sbyte) {
 
       #endif
     } else if (command == CMD_DISP_BLNK) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_DISPLAY
         if (sbyte == FESC) {
             ESCAPE = true;
@@ -1333,6 +1463,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_DISP_ROT) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_DISPLAY
         if (sbyte == FESC) {
             ESCAPE = true;
@@ -1347,6 +1478,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_DIS_IA) {
+      if (!STOLO_MAY_MUTATE()) return;
       if (sbyte == FESC) {
           ESCAPE = true;
       } else {
@@ -1358,6 +1490,7 @@ void serial_callback(uint8_t sbyte) {
           dia_conf_save(sbyte);
       }
     } else if (command == CMD_DISP_RCND) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_DISPLAY
         if (sbyte == FESC) {
             ESCAPE = true;
@@ -1371,6 +1504,7 @@ void serial_callback(uint8_t sbyte) {
         }
       #endif
     } else if (command == CMD_NP_INT) {
+      if (!STOLO_MAY_MUTATE()) return;
       #if HAS_NP
         if (sbyte == FESC) {
             ESCAPE = true;
@@ -1938,11 +2072,11 @@ void buffer_serial() {
       #if MCU_VARIANT != MCU_ESP32 && MCU_VARIANT != MCU_NRF52
         if (!fifo_isfull_locked(&serialFIFO)) { fifo_push_locked(&serialFIFO, Serial.read()); }
       #elif HAS_BLUETOOTH || HAS_BLE == true || HAS_WIFI
-        if      (bt_state == BT_STATE_CONNECTED) { STOLO_NOTE_SOURCE(STOLO_SRC_BLE);  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, SerialBT.read()); } }
+        if      (bt_state == BT_STATE_CONNECTED) { STOLO_NOTE_SOURCE(STOLO_SRC_BLE); if (!fifo_isfull(&serialFIFO)) stolo_buffer_byte(STOLO_SRC_BLE, SerialBT.read()); }
         #if HAS_WIFI
-        else if (wifi_host_is_connected())       { STOLO_NOTE_SOURCE(STOLO_SRC_WIFI); if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, wifi_remote_read()); } }
+        else if (wifi_host_is_connected())       { STOLO_NOTE_SOURCE(STOLO_SRC_WIFI); if (!fifo_isfull(&serialFIFO)) stolo_buffer_byte(STOLO_SRC_WIFI, wifi_remote_read()); }
         #endif
-        else                                     { STOLO_NOTE_SOURCE(STOLO_SRC_USB);  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
+        else                                     { STOLO_NOTE_SOURCE(STOLO_SRC_USB); if (!fifo_isfull(&serialFIFO)) stolo_buffer_byte(STOLO_SRC_USB, Serial.read()); }
       #else
         if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); }
       #endif

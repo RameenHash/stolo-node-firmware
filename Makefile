@@ -34,12 +34,13 @@ prep-avr:
 prep-esp32:
 	arduino-cli core update-index --config-file arduino-cli.yaml
 	arduino-cli core install esp32:esp32@$(ARDUINO_ESP_CORE_VER) --config-file arduino-cli.yaml
-	arduino-cli lib install "Adafruit SSD1306"
-	arduino-cli lib install "Adafruit SH110X"
-	arduino-cli lib install "Adafruit ST7735 and ST7789 Library"
-	arduino-cli lib install "Adafruit NeoPixel"
-	arduino-cli lib install "XPowersLib"
-	arduino-cli lib install "Crypto"
+	arduino-cli lib install --no-deps "Adafruit BusIO@1.17.4" "Adafruit GFX Library@1.12.6" "Adafruit seesaw Library@1.7.9"
+	arduino-cli lib install --no-deps "Adafruit SSD1306@2.5.17"
+	arduino-cli lib install --no-deps "Adafruit SH110X@2.1.15"
+	arduino-cli lib install --no-deps "Adafruit ST7735 and ST7789 Library@1.11.0"
+	arduino-cli lib install --no-deps "Adafruit NeoPixel@1.15.5"
+	arduino-cli lib install --no-deps "XPowersLib@0.3.3"
+	arduino-cli lib install --no-deps "Crypto@0.4.0"
 
 prep-samd:
 	arduino-cli core update-index --config-file arduino-cli.yaml
@@ -50,9 +51,10 @@ prep-nrf:
 	arduino-cli core install rakwireless:nrf52 --config-file arduino-cli.yaml
 	arduino-cli core install Heltec_nRF52:Heltec_nRF52 --config-file arduino-cli.yaml
 	arduino-cli core install adafruit:nrf52 --config-file arduino-cli.yaml
-	arduino-cli lib install "GxEPD2"
+	arduino-cli lib install --no-deps "Adafruit BusIO@1.17.4" "Adafruit GFX Library@1.12.6"
+	arduino-cli lib install --no-deps "GxEPD2@1.6.9"
 	arduino-cli config set library.enable_unsafe_install true
-	arduino-cli lib install --git-url https://github.com/liamcottle/esp8266-oled-ssd1306#e16cee124fe26490cb14880c679321ad8ac89c95
+	arduino-cli lib install --no-deps --git-url https://github.com/liamcottle/esp8266-oled-ssd1306#e16cee124fe26490cb14880c679321ad8ac89c95
 	pip install adafruit-nrfutil --upgrade
 
 console-site:
@@ -549,5 +551,19 @@ test-host:
 	@mkdir -p build/host
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/authority_test Tests/host/authority_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/store_test Tests/host/store_test.cpp
+	python3 Tests/host/extract_dispatcher.py
+	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/dispatcher_test Tests/host/dispatcher_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/corrections_test Tests/host/corrections_test.cpp
+	g++ -std=c++17 -Wall -Ibuild/host -o build/host/persistence_test Tests/host/persistence_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/compat_disabled_test Tests/host/compat_disabled_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=1 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_hw_test Tests/host/transport_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=0 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_tiny_test Tests/host/transport_test.cpp
+	./build/host/transport_hw_test
+	./build/host/transport_tiny_test
+	python3 Tests/host/tool_test.py
+	./build/host/persistence_test
+	./build/host/compat_disabled_test
+	./build/host/corrections_test
+	./build/host/dispatcher_test
 	./build/host/store_test
 	./build/host/authority_test
