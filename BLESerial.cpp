@@ -13,7 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-// Modified by Stolo Systems Inc., 2026-09-19 — discard BLE buffers at disconnect.
+// Modified by Stolo Systems Inc., 2026-09-19 — SCP CTRL/EVENT service,
+// independent buffered input and MTU-aware output; discard buffers on disconnect.
 #include "Boards.h"
 
 #if PLATFORM != PLATFORM_NRF52
@@ -34,9 +35,15 @@ uint32_t BLESerial::onPassKeyRequest() { return bt_passkey_callback(); }
 void BLESerial::onPassKeyNotify(uint32_t passkey) { bt_passkey_notify_callback(passkey); }
 bool BLESerial::onSecurityRequest() { return bt_security_request_callback(); }
 void BLESerial::onAuthenticationComplete(esp_ble_auth_cmpl_t auth_result) { bt_authentication_complete_callback(auth_result); }
-void BLESerial::onConnect(BLEServer *server) { bt_connect_callback(server); }
+void BLESerial::onConnect(BLEServer *server) {
+  #if defined(STOLO_BUILD)
+    resetControl();
+  #endif
+  bt_connect_callback(server);
+}
 void BLESerial::onDisconnect(BLEServer *server) {
   #if defined(STOLO_BUILD)
+    resetControl();
     rx_buffer.clear(); transmitBufferLength = 0; numAvailableLines = 0;
   #endif
   bt_disconnect_callback(server); ble_server->startAdvertising();
@@ -127,6 +134,9 @@ void BLESerial::begin(const char *name) {
   BLEDevice::setSecurityCallbacks(this);
 
   SetupSerialService();
+  #if defined(STOLO_BUILD)
+    SetupControlService();
+  #endif
   this->startAdvertising();
 }
 
@@ -147,6 +157,22 @@ void BLESerial::stopAdvertising() {
 void BLESerial::end() { BLEDevice::deinit(); }
 
 void BLESerial::onWrite(BLECharacteristic *characteristic) {
+  #if defined(STOLO_BUILD)
+    if (characteristic == CtrlCharacteristic) {
+      // Stack permissions enforce encrypted MITM writes. Keep the application
+      // guard too, and leave dispatch/flash/link actions to the firmware loop.
+      if (!bt_client_authenticated()) return;
+      auto value = characteristic->getValue();
+      portENTER_CRITICAL(&control_mux);
+      if (value.length() > 1023 - control_rx.getLength()) {
+        control_rx.clear(); control_overflow = true;
+      } else {
+        for (size_t i = 0; i < value.length(); ++i) control_rx.push(value[i]);
+      }
+      portEXIT_CRITICAL(&control_mux);
+      return;
+    }
+  #endif
   if (characteristic->getUUID().toString() == BLE_RX_UUID) {
     auto value = characteristic->getValue();
     for (int i = 0; i < value.length(); i++) { rx_buffer.push(value[i]); }
@@ -170,6 +196,67 @@ void BLESerial::SetupSerialService() {
 
   SerialService->start();
 }
+
+#if defined(STOLO_BUILD)
+void BLESerial::SetupControlService() {
+  BLEService* service = ble_server->createService("d8b6a9ad-bf50-45f0-997c-2b54d82bec2d");
+  CtrlCharacteristic = service->createCharacteristic("d8b6a9ad-bf50-45f0-997c-2b54d82bec2e", BLECharacteristic::PROPERTY_WRITE);
+  CtrlCharacteristic->setAccessPermissions(ESP_GATT_PERM_WRITE_ENC_MITM);
+  CtrlCharacteristic->setCallbacks(this);
+  EventCharacteristic = service->createCharacteristic("d8b6a9ad-bf50-45f0-997c-2b54d82bec2f", BLECharacteristic::PROPERTY_NOTIFY);
+  EventCharacteristic->setAccessPermissions(ESP_GATT_PERM_READ_ENC_MITM);
+  EventCCCD = new BLE2902();
+  // Subscription writes must be protected too; READ_ENC_MITM alone would
+  // make the descriptor unwritable, and the default BLE2902 is unprotected.
+  EventCCCD->setAccessPermissions((esp_gatt_perm_t)(ESP_GATT_PERM_READ_ENC_MITM | ESP_GATT_PERM_WRITE_ENC_MITM));
+  EventCharacteristic->addDescriptor(EventCCCD);
+  service->start(); // Discover after NUS connect; no extra advertising UUID.
+}
+
+void BLESerial::resetControl() {
+  portENTER_CRITICAL(&control_mux);
+  ++control_generation;
+  control_rx.clear(); control_overflow = false;
+  portEXIT_CRITICAL(&control_mux);
+  if (EventCCCD) EventCCCD->setNotifications(false);
+  // Do not retain the previous host's last notification in the attribute.
+  if (EventCharacteristic) EventCharacteristic->setValue((uint8_t*)"", 0);
+}
+
+uint32_t BLESerial::controlGeneration() {
+  portENTER_CRITICAL(&control_mux);
+  uint32_t generation = control_generation;
+  portEXIT_CRITICAL(&control_mux);
+  return generation;
+}
+
+int BLESerial::readControl(uint32_t* generation) {
+  portENTER_CRITICAL(&control_mux);
+  *generation = control_generation;
+  int byte;
+  if (control_overflow) { control_overflow = false; byte = -2; }
+  else byte = control_rx.pop();
+  portEXIT_CRITICAL(&control_mux);
+  return byte;
+}
+
+void BLESerial::writeControl(const uint8_t* bytes, size_t len, uint32_t generation) {
+  if (!EventCharacteristic || !EventCCCD) return;
+  size_t offset = 0;
+  while (offset < len) {
+    if (generation != controlGeneration() || !bt_client_authenticated()
+        || !connected() || !EventCCCD->getNotifications()) return;
+    // Query on every notification: MTU is per link and may still be 23.
+    uint16_t mtu = ble_server->getPeerMTU(ble_server->getConnId());
+    size_t chunk = mtu > 3 ? mtu - 3 : 20;
+    if (chunk > BLE_BUFFER_SIZE) chunk = BLE_BUFFER_SIZE;
+    if (chunk > len - offset) chunk = len - offset;
+    EventCharacteristic->setValue((uint8_t*)bytes + offset, chunk);
+    EventCharacteristic->notify(true);
+    offset += chunk;
+  }
+}
+#endif
 
 BLESerial::BLESerial() { }
 

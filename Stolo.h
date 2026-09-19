@@ -28,7 +28,7 @@
 
 #define STOLO_FW_VERSION "0.2.1"
 
-// Product proposal (a), not a settled policy: factory-only legacy compat.
+// Decided policy: once-only factory legacy compat, on by default.
 // Set to 0 in product builds that require SCP enrollment from first boot.
 #ifndef STOLO_ENABLE_FACTORY_COMPAT
 #define STOLO_ENABLE_FACTORY_COMPAT 1
@@ -55,7 +55,8 @@ uint32_t stolo_bt_window_ms();
 // Session hooks (StoloProtocol.h), declared here because Bluetooth.h,
 // Remote.h and the .ino call them before that header is included.
 void stolo_note_source(uint8_t source);   // buffer_serial: where these bytes came from
-void stolo_host_disconnected();           // BLE disconnect, WiFi client close, LEAVE, RESET
+void stolo_ble_connection_boundary();     // BLE task: defer parser teardown to loop
+void stolo_host_disconnected();           // loop-side disconnect, WiFi close, LEAVE, RESET
 bool stolo_radio_freq_allowed(uint32_t f);
 bool stolo_radio_txp_allowed(int p);
 bool stolo_kiss_freq_write(uint32_t f);

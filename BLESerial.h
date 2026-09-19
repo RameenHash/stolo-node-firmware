@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// Modified by Stolo Systems Inc., 2026-09-19 — independent SCP control channel.
 #include "Boards.h"
 
 #if PLATFORM != PLATFORM_NRF52
@@ -100,6 +101,11 @@ public:
   bool onConfirmPIN(uint32_t pin);
 
   bool connected();
+  #if defined(STOLO_BUILD)
+    int readControl(uint32_t* generation);
+    uint32_t controlGeneration();
+    void writeControl(const uint8_t* bytes, size_t len, uint32_t generation);
+  #endif
 
   BLEServer *ble_server;
   BLEAdvertising *ble_adv;
@@ -129,6 +135,18 @@ private:
   const char *BLE_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
   const char *BLE_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
+  #if defined(STOLO_BUILD)
+    void SetupControlService();
+    void resetControl();
+    BLECharacteristic* CtrlCharacteristic = nullptr;
+    BLECharacteristic* EventCharacteristic = nullptr;
+    BLE2902* EventCCCD = nullptr;
+    // Callback producer and loop consumer; never overwrite an unread byte.
+    BLEFIFO<1024> control_rx;
+    portMUX_TYPE control_mux = portMUX_INITIALIZER_UNLOCKED;
+    uint32_t control_generation = 0;
+    bool control_overflow = false;
+  #endif
   bool started = false;
 };
 

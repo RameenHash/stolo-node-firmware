@@ -49,7 +49,13 @@ inline uint32_t wr_device_ip = 0;
 inline char wr_ssid[33] = {}, wr_psk[33] = {};
 inline uint8_t bt_state = BT_STATE_ON; inline bool bt_allow_pairing = false, bt_enabled = true, ble_authenticated = false;
 inline int fake_bonds = 1;
-inline std::vector<uint8_t> out;
+inline std::vector<uint8_t> out, event_out;
+inline uint32_t fake_ble_link = 1;
+inline uint32_t stolo_ble_link_generation() { return fake_ble_link; }
+inline void stolo_ble_event_send(const uint8_t* bytes, size_t len, uint32_t link) {
+  if (!ble_authenticated || link != fake_ble_link) return;
+  event_out.insert(event_out.end(), bytes, bytes + len); calls.push_back("event_write");
+}
 inline void serial_write(uint8_t b) { out.push_back(b); calls.push_back("serial_write"); }
 inline void escaped_serial_write(uint8_t b) { out.push_back(b); }
 #define NOOP(name) inline void name() { calls.push_back(#name); }
@@ -88,7 +94,7 @@ inline void stolo_parser_abort() {}
 // ── tiny test kit ─────────────────────────────────────────────────────
 inline int failures = 0, passes = 0;
 #define CHECK(cond, label) do { if (cond) { passes++; } else { failures++; fprintf(stderr, "FAIL %s:%d  %s\n", __FILE__, __LINE__, label); } } while (0)
-inline void reset_out() { out.clear(); calls.clear(); }
+inline void reset_out() { out.clear(); event_out.clear(); calls.clear(); }
 inline bool called(const char* name) { for (auto& c : calls) if (c == name) return true; return false; }
 // Replies are [FEND][CMD_STOLO][ver][type][seq][body...][FEND] (no escaping in this stub).
 inline int last_reply_type() { for (int i = (int)out.size() - 1; i >= 0; i--) if (out[i] == FEND && i >= 4) { /* find frame start */ } return out.size() >= 5 ? out[3] : -1; }

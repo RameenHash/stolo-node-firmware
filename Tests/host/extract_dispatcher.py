@@ -27,3 +27,20 @@ for name, output in [('stolo_transport_drain', 'transport.h'), ('stolo_usb_event
     if not match:
         raise SystemExit(f'missing production hook: {name}')
     Path('build/host/' + output).write_text(match.group()+'\n')
+
+# Compile real GATT setup, queue and notification code against a fake stack.
+source = Path('BLESerial.h').read_text()
+fifo = re.search(r'template <size_t n>\nclass BLEFIFO \{.*?^\};', source, re.M | re.S)
+if not fifo:
+    raise SystemExit('missing production BLEFIFO')
+Path("build/host/ble_fifo.h").write_text(fifo.group()+"\n")
+parts = []
+source = Path('BLESerial.cpp').read_text()
+for name in ('SetupControlService', 'resetControl', 'controlGeneration',
+             'readControl', 'writeControl', 'onWrite', 'onConnect', 'onDisconnect',
+             'startAdvertising'):
+    match = re.search(r'^(?:void|int|uint32_t) BLESerial::' + name + r'\([^\n]*\) \{\n.*?^\}', source, re.M | re.S)
+    if not match:
+        raise SystemExit(f'missing production BLE method: {name}')
+    parts.append(match.group())
+Path('build/host/ble_control.h').write_text('\n\n'.join(parts)+'\n')
