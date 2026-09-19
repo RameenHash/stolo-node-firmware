@@ -15,6 +15,10 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+// Modified by Stolo Systems Inc., 2026-09-14 — SCP parser hooks, the
+// legacy-KISS session gate, input-source tagging, and the Stolo
+// setup/update calls. Each is compiled in only with STOLO_BUILD; see
+// CHANGES-from-upstream.md.
 #include "Utilities.h"
 
 FIFOBuffer serialFIFO;
@@ -142,6 +146,9 @@ void setup() {
   // Configure input and output pins
   #if HAS_INPUT
     input_init();
+    #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+      stolo_setup();
+    #endif
   #endif
 
   #if HAS_NP == false
@@ -783,6 +790,9 @@ void serial_callback(uint8_t sbyte) {
     }
 
   } else if (sbyte == FEND) {
+    #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+      if (IN_FRAME && command == CMD_STOLO) { stolo_scp_frame_end(); }
+    #endif
     IN_FRAME = true;
     command = CMD_UNKNOWN;
     frame_len = 0;
@@ -790,6 +800,20 @@ void serial_callback(uint8_t sbyte) {
     // Have a look at the command byte first
     if (frame_len == 0 && command == CMD_UNKNOWN) {
         command = sbyte;
+        #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+          if (command == CMD_STOLO) { stolo_scp_frame_begin(); }
+          else if (!stolo_kiss_gate(command)) { command = CMD_STOLO_DROP; }
+        #endif
+    #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    } else if (command == CMD_STOLO) {
+      if (sbyte == FESC) { ESCAPE = true; }
+      else {
+        if (ESCAPE) { if (sbyte == TFEND) sbyte = FEND; if (sbyte == TFESC) sbyte = FESC; ESCAPE = false; }
+        stolo_scp_rx_byte(sbyte);
+      }
+    } else if (command == CMD_STOLO_DROP) {
+      // A mutation the session gate refused: the rest of the frame is discarded.
+    #endif
     } else if (command == CMD_DATA) {
         if (bt_state != BT_STATE_CONNECTED) {
           cable_state = CABLE_STATE_CONNECTED;
@@ -1733,6 +1757,9 @@ void loop() {
 
   #if HAS_BLUETOOTH || HAS_BLE == true
     if (!console_active && bt_ready) update_bt();
+    #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+      stolo_update();
+    #endif
   #endif
 
   #if HAS_WIFI
@@ -1887,11 +1914,11 @@ void buffer_serial() {
       #if MCU_VARIANT != MCU_ESP32 && MCU_VARIANT != MCU_NRF52
         if (!fifo_isfull_locked(&serialFIFO)) { fifo_push_locked(&serialFIFO, Serial.read()); }
       #elif HAS_BLUETOOTH || HAS_BLE == true || HAS_WIFI
-        if      (bt_state == BT_STATE_CONNECTED) { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, SerialBT.read()); } }
+        if      (bt_state == BT_STATE_CONNECTED) { stolo_input_source = STOLO_SRC_BLE;  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, SerialBT.read()); } }
         #if HAS_WIFI
-        else if (wifi_host_is_connected())       { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, wifi_remote_read()); } }
+        else if (wifi_host_is_connected())       { stolo_input_source = STOLO_SRC_WIFI; if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, wifi_remote_read()); } }
         #endif
-        else                                     { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
+        else                                     { stolo_input_source = STOLO_SRC_USB;  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
       #else
         if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); }
       #endif
