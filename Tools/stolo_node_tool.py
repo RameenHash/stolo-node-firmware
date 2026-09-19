@@ -14,7 +14,7 @@ to the same port at the same time (one process owns a serial port).
     stolo_node_tool.py enroll-owner --key new-owner.key --handover-from owner.key
     stolo_node_tool.py get-radio
     stolo_node_tool.py set-radio --key owner.key --frequency 915000000 --txpower 17
-    stolo_node_tool.py get-wifi
+    stolo_node_tool.py get-wifi --key owner.key      (sensitive reads need the owner on an owned node)
     stolo_node_tool.py set-wifi --key owner.key --mode ap --ssid "Stolo Node" --psk secret --channel 6
     stolo_node_tool.py get-bt
     stolo_node_tool.py set-bt --key owner.key --pairing on --window 120
@@ -35,11 +35,12 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 
 FEND, FESC, TFEND, TFESC = 0xC0, 0xDB, 0xDC, 0xDD
 CMD_STOLO = 0x7A
-SCP_VERSION = 0x01
+SCP_VERSION = 0x02
 REPLY = 0x80
 T = dict(HELLO=0x01, AUTH=0x02, ENROLL=0x03, FORGET_OWNER=0x04, GET_RADIO=0x10, SET_RADIO=0x11,
          GET_WIFI=0x20, SET_WIFI=0x21, GET_BT=0x30, SET_BT=0x31, GET_FAULTS=0x40, ERROR=0x7F)
-ERRORS = {1: "bad request", 2: "unauthorized", 3: "out of band", 4: "not supported", 5: "store failed", 6: "enrollment closed"}
+ERRORS = {1: "bad request", 2: "unauthorized", 3: "out of band", 4: "not supported", 5: "store failed", 6: "enrollment closed",
+          7: "store unreadable: physical recovery required"}
 WIFI_MODES = {"off": 0, "sta": 1, "ap": 2}
 BT_STATES = {0: "off", 1: "on", 2: "pairing", 3: "connected", 0xFF: "n/a"}
 
@@ -67,6 +68,7 @@ class Node:
         self.timeout = timeout
         self.seq = 0
         self.buf = bytearray()
+        self.source = None
 
     def close(self):
         self.ser.close()
@@ -127,28 +129,39 @@ class Node:
         nonce = b[i:i + 16]; i += 16
         source = b[i] if i < len(b) else None
         self.node_pub, self.nonce, self.epoch = node_pub, nonce, epoch
+        self.source = source
         return dict(stolo_fw=fw, rnode_fw=f"{maj}.{mn}", node_pub=node_pub.hex(),
                     owner_enrolled=bool(flags & 1), authorized=bool(flags & 2),
                     enroll_window_open=bool(flags & 4), store_ok=bool(flags & 8),
+                    compat_mode=bool(flags & 16),
                     attestation=attest, owner_epoch=epoch, nonce=nonce.hex(),
                     source={0: "usb", 1: "ble", 2: "wifi"}.get(source, source))
 
     def auth(self, key):
+        # v2 transcript: domain || node_pub || nonce || epoch || source. node_pub stops a
+        # challenge for node A being answered for node B under the same key; source binds
+        # the answer to the carrier it was issued on.
         self.hello()
-        msg = b"stolo-auth-v1" + self.nonce + struct.pack(">I", self.epoch)
+        msg = (b"stolo-auth-v2" + self.node_pub + self.nonce + struct.pack(">I", self.epoch)
+               + bytes([self.source if self.source is not None else 0]))
         b = self.request(T["AUTH"], key.sign(msg))
         if not b[0]:
             raise SCPError("authentication refused (wrong owner key?)")
+        # A successful AUTH issues a fresh nonce so a following ENROLL (hand-over) needs no HELLO.
+        if len(b) >= 18:
+            self.nonce = b[2:18]
         return True
 
     def enroll(self, key):
         # No HELLO here unless the node key is still unknown: HELLO clears
         # authorization, and a hand-over is an ENROLL sent from the session
-        # the current owner just authenticated.
+        # the current owner just authenticated (whose AUTH reply carried the nonce).
         if getattr(self, "node_pub", None) is None:
             self.hello()
         owner_pub = key.public_key().public_bytes_raw()
-        proof = key.sign(b"stolo-enroll-v1" + self.node_pub + owner_pub)
+        # v2: the proof is fresh — it signs the session nonce and the current epoch, so a
+        # captured proof cannot be replayed when enrollment reopens.
+        proof = key.sign(b"stolo-enroll-v2" + self.node_pub + owner_pub + self.nonce + struct.pack(">I", self.epoch))
         b = self.request(T["ENROLL"], owner_pub + proof)
         return dict(ok=bool(b[0]), owner_epoch=struct.unpack(">I", b[1:5])[0])
 
@@ -271,8 +284,11 @@ def main(argv=None):
                     node.auth(load_key(a.handover_from))
                 out = node.enroll(key)
             elif a.cmd == "get-radio": out = node.get_radio()
-            elif a.cmd == "get-wifi": out = node.get_wifi()
-            elif a.cmd == "get-bt": out = node.get_bt()
+            elif a.cmd in ("get-wifi", "get-bt"):
+                # Sensitive reads: owner (or an unowned node in compat mode) only.
+                if key is not None:
+                    node.auth(key)
+                out = node.get_wifi() if a.cmd == "get-wifi" else node.get_bt()
             elif a.cmd == "faults": out = dict(reset_reasons=node.faults())
             else:
                 node.auth(key)

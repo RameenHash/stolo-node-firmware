@@ -44,6 +44,16 @@ uint32_t stolo_bt_window_ms();
 #define STOLO_SRC_USB  0
 #define STOLO_SRC_BLE  1
 #define STOLO_SRC_WIFI 2
-uint8_t stolo_input_source = STOLO_SRC_USB;
+
+#if defined(STOLO_BUILD)
+// Session hooks (StoloProtocol.h), declared here because Bluetooth.h,
+// Remote.h and the .ino call them before that header is included.
+void stolo_note_source(uint8_t source);   // buffer_serial: where these bytes came from
+void stolo_host_disconnected();           // BLE disconnect, WiFi client close, LEAVE, RESET
+bool stolo_radio_freq_allowed(uint32_t f);
+bool stolo_radio_txp_allowed(int p);
+bool stolo_kiss_freq_write(uint32_t f);
+bool stolo_kiss_txp_write(int p);
+#endif
 
 #endif

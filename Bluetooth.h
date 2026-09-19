@@ -338,6 +338,9 @@ char bt_devname[11];
       display_unblank();
       ble_authenticated = false;
       bt_state = BT_STATE_ON;
+      #if defined(STOLO_BUILD)
+        stolo_host_disconnected();   // whatever this link had earned is gone
+      #endif
     }
 
     bool bt_setup_hw() {

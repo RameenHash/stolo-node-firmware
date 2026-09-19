@@ -21,6 +21,16 @@
 // CHANGES-from-upstream.md.
 #include "Utilities.h"
 
+#if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+  #define STOLO_NOTE_SOURCE(src)    stolo_note_source(src)
+  #define STOLO_FREQ_WRITE_OK(f)    stolo_kiss_freq_write(f)
+  #define STOLO_TXP_WRITE_OK(p)     stolo_kiss_txp_write(p)
+#else
+  #define STOLO_NOTE_SOURCE(src)    ((void)0)
+  #define STOLO_FREQ_WRITE_OK(f)    true
+  #define STOLO_TXP_WRITE_OK(p)     true
+#endif
+
 FIFOBuffer serialFIFO;
 uint8_t serialBuffer[CONFIG_UART_BUFFER_SIZE+1];
 
@@ -514,6 +524,14 @@ void ISR_VECT receive_callback(int packet_size) {
 
 bool startRadio() {
   update_radio_lock();
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    // The full effective configuration is judged before TX is ever enabled,
+    // whichever path wrote it (SCP, legacy KISS, or the saved boot config).
+    if (!stolo_radio_freq_allowed(lora_freq) || !stolo_radio_txp_allowed(lora_txp)) {
+      kiss_indicate_radiostate();
+      return false;
+    }
+  #endif
   if (!radio_online && !console_active) {
     if (!radio_locked && hw_ready) {
       if (!LoRa->begin(lora_freq)) {
@@ -849,7 +867,7 @@ void serial_callback(uint8_t sbyte) {
 
           if (freq == 0) {
             kiss_indicate_frequency();
-          } else {
+          } else if (STOLO_FREQ_WRITE_OK(freq)) {
             lora_freq = freq;
             if (op_mode == MODE_HOST) setFrequency();
             kiss_indicate_frequency();
@@ -899,9 +917,15 @@ void serial_callback(uint8_t sbyte) {
           if (txp > 17) txp = 17;
         #endif
 
-        lora_txp = txp;
-        if (op_mode == MODE_HOST) setTXPower();
-        kiss_indicate_txpower();
+        if (STOLO_TXP_WRITE_OK(txp)) {
+
+          lora_txp = txp;
+
+          if (op_mode == MODE_HOST) setTXPower();
+
+          kiss_indicate_txpower();
+
+        }
       }
     } else if (command == CMD_SF) {
       if (sbyte == 0xFF) {
@@ -1914,11 +1938,11 @@ void buffer_serial() {
       #if MCU_VARIANT != MCU_ESP32 && MCU_VARIANT != MCU_NRF52
         if (!fifo_isfull_locked(&serialFIFO)) { fifo_push_locked(&serialFIFO, Serial.read()); }
       #elif HAS_BLUETOOTH || HAS_BLE == true || HAS_WIFI
-        if      (bt_state == BT_STATE_CONNECTED) { stolo_input_source = STOLO_SRC_BLE;  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, SerialBT.read()); } }
+        if      (bt_state == BT_STATE_CONNECTED) { STOLO_NOTE_SOURCE(STOLO_SRC_BLE);  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, SerialBT.read()); } }
         #if HAS_WIFI
-        else if (wifi_host_is_connected())       { stolo_input_source = STOLO_SRC_WIFI; if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, wifi_remote_read()); } }
+        else if (wifi_host_is_connected())       { STOLO_NOTE_SOURCE(STOLO_SRC_WIFI); if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, wifi_remote_read()); } }
         #endif
-        else                                     { stolo_input_source = STOLO_SRC_USB;  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
+        else                                     { STOLO_NOTE_SOURCE(STOLO_SRC_USB);  if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
       #else
         if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); }
       #endif

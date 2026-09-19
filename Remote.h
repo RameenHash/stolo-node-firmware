@@ -12,6 +12,8 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// Modified by Stolo Systems Inc., 2026-09-19 — a WiFi client close ends the
+// Stolo control session (see StoloProtocol.h and CHANGES-from-upstream.md).
 
 #include <WiFi.h>
 
@@ -144,6 +146,9 @@ void wifi_remote_init() {
 
 void wifi_remote_close_all() {
   // wifi_dbg("Close all"); // TODO: Remove debug
+  #if defined(STOLO_BUILD)
+    stolo_host_disconnected();   // two successive WiFi clients share a source label
+  #endif
   if (connection) { connection.stop(); }
   WiFiClient client = remote_listener.available();
   while (client) { client.stop(); client = remote_listener.available(); }

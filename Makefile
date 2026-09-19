@@ -541,3 +541,13 @@ release-xiao_s3:
 	cp build/esp32.esp32.XIAO_ESP32S3/RNode_Firmware.ino.partitions.bin build/rnode_firmware_xiao_esp32s3.partitions
 	zip --junk-paths ./Release/rnode_firmware_xiao_esp32s3.zip ./Release/esptool/esptool.py ./Release/console_image.bin build/rnode_firmware_xiao_esp32s3.boot_app0 build/rnode_firmware_xiao_esp32s3.bin build/rnode_firmware_xiao_esp32s3.bootloader build/rnode_firmware_xiao_esp32s3.partitions
 	rm -r build
+# Host tests against the REAL Stolo dispatcher and store (Tests/host):
+# hardware, persistence and Ed25519 are stubs, so these prove state
+# transitions and policy ("software verified"), never ESP32 behaviour
+# ("device qualified", see the plan's testing queue).
+test-host:
+	@mkdir -p build/host
+	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/authority_test Tests/host/authority_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/store_test Tests/host/store_test.cpp
+	./build/host/store_test
+	./build/host/authority_test
