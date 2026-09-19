@@ -75,6 +75,8 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
       - name: Install the ESP32 core and libraries (upstream recipe)
         run: make prep-esp32
+      - name: Host authority regression tests
+        run: make test-host
       - name: Build the Stolo T-Beam Supreme target (-DSTOLO_BUILD=1)
         run: make firmware-stolo-tbeam_supreme
       - name: Record what was built

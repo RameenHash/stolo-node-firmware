@@ -26,7 +26,13 @@
 
 #include <stdint.h>
 
-#define STOLO_FW_VERSION "0.2.0"
+#define STOLO_FW_VERSION "0.2.1"
+
+// Product proposal (a), not a settled policy: factory-only legacy compat.
+// Set to 0 in product builds that require SCP enrollment from first boot.
+#ifndef STOLO_ENABLE_FACTORY_COMPAT
+#define STOLO_ENABLE_FACTORY_COMPAT 1
+#endif
 
 // The default presence-gated pairing window. Upstream's 35 s self-expiring
 // window (BT_PAIRING_TIMEOUT) closed before a user had found the phone's

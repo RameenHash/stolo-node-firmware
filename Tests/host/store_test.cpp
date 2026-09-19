@@ -3,7 +3,57 @@
 // floor (review F7), and recovery instead of re-minting. Software verified.
 #include "firmware_env.h"
 
+static void test_commit_faults() {
+  boot_owned(); auto baseline = stolo_prefs.data;
+  for (int failure = 1; failure <= 3; ++failure) {
+    stolo_prefs = Preferences(); stolo_prefs.data = baseline; stolo_store_init();
+    auto old = stolo_cfg; auto next = old; next.owner_epoch++; next.owner_pub[0] = 99;
+    stolo_prefs.write_count=0; stolo_prefs.fail_call=failure;
+    CHECK(!stolo_store_commit(&next), "each individual write failure is reported");
+    CHECK(memcmp(&old,&stolo_cfg,sizeof(old))==0, "failed commit never installs RAM candidate");
+    CHECK(stolo_prefs.getUChar("act")==baseline["act"][0], "failed commit never activates");
+    stolo_prefs.fail_call=-1; stolo_store_init();
+    CHECK(stolo_store_ok && stolo_cfg.owner_epoch==(failure==3?8:7), "restart: before floor retains old owner; after floor completes new owner");
+  }
+  stolo_prefs=Preferences(); stolo_prefs.data=baseline; stolo_store_init();
+  auto next=stolo_cfg; next.owner_epoch++; next.owner_pub[0]=99;
+  stolo_prefs.snapshots.clear(); stolo_prefs.writes.clear();
+  CHECK(stolo_store_commit(&next), "successful three-write commit");
+  CHECK(stolo_prefs.writes==std::vector<std::string>({"cfgB","epochfl","act"}), "slot, floor, activation order");
+  auto snapshots=stolo_prefs.snapshots;
+  for (size_t step=0; step<snapshots.size(); ++step) {
+    stolo_prefs=Preferences(); stolo_prefs.data=snapshots[step]; stolo_store_init();
+    CHECK(stolo_store_ok && stolo_cfg.owner_epoch==(step==0?7:8), "restart at every completed write");
+  }
+  stolo_prefs=Preferences(); stolo_prefs.data=snapshots.back();
+  stolo_prefs.data.erase("epochfl"); stolo_prefs.data["act"]=baseline["act"];
+  stolo_store_init();
+  CHECK(stolo_store_ok && stolo_cfg.owner_epoch==8 && stolo_prefs.getUInt("epochfl")==8, "pre-floor upgrade loads highest valid slot and establishes floor");
+  stolo_prefs.data.erase("epochfl"); stolo_prefs.fail_key="epochfl"; stolo_store_init();
+  CHECK(!stolo_store_ok && stolo_store_state==STOLO_STORE_RECOVERY, "upgrade cannot proceed when floor persistence fails");
+}
+static void test_existing_records() {
+  boot_owned(); auto baseline=stolo_prefs.data;
+  for (int fault=0; fault<9; ++fault) {
+    stolo_prefs=Preferences(); stolo_prefs.data=baseline;
+    if (fault==0) for (auto key:stolo_slot_keys) stolo_prefs.data[key].push_back(0);
+    if (fault==1) stolo_prefs.data["cfgA"].resize(sizeof(StoloConfig)-1);
+    if (fault==2) stolo_prefs.data.erase("act");
+    if (fault==3) stolo_prefs.fail_read_key="cfgA";
+    if (fault==4) stolo_prefs.fail_length_key="cfgA";
+    if (fault==5) { stolo_prefs.data.erase("cfgA"); stolo_prefs.data.erase("cfgB"); }
+    if (fault==6) stolo_prefs.fail_begin=true;
+    if (fault==7) stolo_prefs.fail_read_key="epochfl";
+    if (fault==8) stolo_prefs.fail_read_key="act";
+    auto before=stolo_prefs.data;
+    stolo_store_init();
+    CHECK(!stolo_store_ok && stolo_store_state==STOLO_STORE_RECOVERY, "ambiguous existing store enters RECOVERY");
+    CHECK(stolo_prefs.data["cfgA"]==before["cfgA"] && stolo_prefs.data["cfgB"]==before["cfgB"], "recovery does not overwrite slot identities");
+  }
+}
 int main() {
+  test_commit_faults();
+  test_existing_records();
   // Fresh boot mints an identity once.
   stolo_prefs = Preferences(); stolo_store_state = STOLO_STORE_FRESH; stolo_store_init();
   CHECK(stolo_store_ok && stolo_store_state == STOLO_STORE_LOADED && stolo_cfg.owner_enrolled == 0, "factory-new boot mints an unowned identity");

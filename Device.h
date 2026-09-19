@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// Modified by Stolo Systems Inc., 2026-09-19 — checked EEPROM persistence.
 #include <Ed25519.h>
 
 #if MCU_VARIANT == MCU_ESP32
@@ -43,7 +44,7 @@
 #endif
 
 // Forward declaration from Utilities.h
-void eeprom_update(int mapped_addr, uint8_t byte);
+bool eeprom_update(int mapped_addr, uint8_t byte);
 uint8_t eeprom_read(uint32_t addr);
 void hard_reset(void);
 

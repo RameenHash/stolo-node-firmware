@@ -20,6 +20,7 @@ to the same port at the same time (one process owns a serial port).
     stolo_node_tool.py set-bt --key owner.key --pairing on --window 120
     stolo_node_tool.py faults
     stolo_node_tool.py forget-owner --key owner.key
+    stolo_node_tool.py rescue --replace-identity
 
 Port: --port, else $STOLO_PORT, else /dev/cu.usbmodem2101.
 """
@@ -35,9 +36,10 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 
 FEND, FESC, TFEND, TFESC = 0xC0, 0xDB, 0xDC, 0xDD
 CMD_STOLO = 0x7A
+CMD_LEAVE = 0x0A
 SCP_VERSION = 0x02
 REPLY = 0x80
-T = dict(HELLO=0x01, AUTH=0x02, ENROLL=0x03, FORGET_OWNER=0x04, GET_RADIO=0x10, SET_RADIO=0x11,
+T = dict(HELLO=0x01, AUTH=0x02, ENROLL=0x03, FORGET_OWNER=0x04, RESCUE=0x05, GET_RADIO=0x10, SET_RADIO=0x11,
          GET_WIFI=0x20, SET_WIFI=0x21, GET_BT=0x30, SET_BT=0x31, GET_FAULTS=0x40, ERROR=0x7F)
 ERRORS = {1: "bad request", 2: "unauthorized", 3: "out of band", 4: "not supported", 5: "store failed", 6: "enrollment closed",
           7: "store unreadable: physical recovery required"}
@@ -71,7 +73,14 @@ class Node:
         self.source = None
 
     def close(self):
-        self.ser.close()
+        try:
+            if self.ser.is_open:
+                self.ser.write(bytes([FEND, CMD_LEAVE, 0xFF, FEND]))
+                self.ser.flush()
+        except (serial.SerialException, OSError):
+            pass  # Device may already have reset/disconnected; always release the handle.
+        finally:
+            self.ser.close()
 
     def send(self, mtype, body=b""):
         self.seq = (self.seq + 1) & 0xFF
@@ -165,6 +174,11 @@ class Node:
         b = self.request(T["ENROLL"], owner_pub + proof)
         return dict(ok=bool(b[0]), owner_epoch=struct.unpack(">I", b[1:5])[0])
 
+    def rescue(self):
+        self.hello()
+        b = self.request(T["RESCUE"], b"RESCUE")
+        return dict(ok=bool(b[0]), node_pub=b[1:33].hex(), owner_enrolled=False, identity_replaced=True)
+
     def forget_owner(self):
         return dict(ok=bool(self.request(T["FORGET_OWNER"])[0]))
 
@@ -178,6 +192,8 @@ class Node:
                     model=f"0x{model:02x}", band=None if lo == 0 else dict(low_hz=lo, high_hz=hi, max_txpower_dbm=maxp))
 
     def get_radio(self):
+        if getattr(self, "node_pub", None) is None:
+            self.hello()
         return self._radio(self.request(T["GET_RADIO"]))
 
     def set_radio(self, **kw):
@@ -203,6 +219,8 @@ class Node:
                     ip=".".join(str((ip >> s) & 0xFF) for s in (0, 8, 16, 24)))
 
     def get_wifi(self):
+        if getattr(self, "node_pub", None) is None:
+            self.hello()
         return self._wifi(self.request(T["GET_WIFI"]))
 
     def set_wifi(self, mode=None, ssid=None, psk=None, channel=None):
@@ -211,7 +229,8 @@ class Node:
         if ssid is not None: body += tlv(2, ssid.encode("utf-8"))
         if psk is not None: body += tlv(3, psk.encode("utf-8"))
         if channel is not None: body += tlv(4, bytes([channel]))
-        return self._wifi(self.request(T["SET_WIFI"], body))
+        reply = self.request(T["SET_WIFI"], body)
+        return dict(self._wifi(reply), accepted_mask=reply[-2], runtime_pending=bool(reply[-1] & 1))
 
     @staticmethod
     def _bt(b):
@@ -221,6 +240,8 @@ class Node:
                     window_s=struct.unpack(">H", b[3:5])[0], enabled=bool(b[5]))
 
     def get_bt(self):
+        if getattr(self, "node_pub", None) is None:
+            self.hello()
         return self._bt(self.request(T["GET_BT"]))
 
     def set_bt(self, pairing=None, debond=False, window=None, enabled=None):
@@ -229,9 +250,12 @@ class Node:
         if debond: body += tlv(2, b"\x01")
         if window is not None: body += tlv(3, struct.pack(">H", window))
         if enabled is not None: body += tlv(4, bytes([1 if enabled else 0]))
-        return self._bt(self.request(T["SET_BT"], body))
+        reply = self.request(T["SET_BT"], body)
+        return dict(self._bt(reply), accepted_mask=reply[-2], runtime_pending=bool(reply[-1] & 1))
 
     def faults(self):
+        if getattr(self, "node_pub", None) is None:
+            self.hello()
         b = self.request(T["GET_FAULTS"])
         names = {1: "power-on", 3: "software", 4: "panic", 5: "int-wdt", 6: "task-wdt", 7: "wdt", 8: "deep-sleep", 9: "brownout", 10: "sdio"}
         return [names.get(x, x) for x in b[1:1 + b[0]]]
@@ -253,6 +277,9 @@ def main(argv=None):
     sub.add_parser("keygen").add_argument("file")
     for name in ("hello", "get-radio", "get-wifi", "get-bt", "faults", "enroll-owner", "forget-owner"):
         sub.add_parser(name)
+    rescue = sub.add_parser("rescue", help="replace unreadable identity during the physical boot window")
+    rescue.add_argument("--replace-identity", action="store_true", required=True,
+                        help="acknowledge permanent replacement of node identity and owner")
     r = sub.add_parser("set-radio")
     r.add_argument("--frequency", type=int); r.add_argument("--bandwidth", type=int); r.add_argument("--sf", type=int)
     r.add_argument("--cr", type=int); r.add_argument("--txpower", type=int)
@@ -279,6 +306,7 @@ def main(argv=None):
             if needs_key and key is None:
                 ap.error(f"{a.cmd} needs --key")
             if a.cmd == "hello": out = node.hello()
+            elif a.cmd == "rescue": out = node.rescue()
             elif a.cmd == "enroll-owner":
                 if a.handover_from:
                     node.auth(load_key(a.handover_from))
