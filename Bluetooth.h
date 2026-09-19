@@ -324,6 +324,9 @@ char bt_devname[11];
     }
 
     void bt_connect_callback(BLEServer *server) {
+      #if defined(STOLO_BUILD)
+        stolo_ble_connection_boundary();
+      #endif
       uint16_t conn_id = server->getConnId();
       // Serial.printf("Connected: %d\n", conn_id);
       display_unblank();
@@ -339,7 +342,7 @@ char bt_devname[11];
       ble_authenticated = false;
       bt_state = BT_STATE_ON;
       #if defined(STOLO_BUILD)
-        stolo_host_disconnected();   // whatever this link had earned is gone
+        stolo_ble_connection_boundary(); // revoke now; loop owns parser teardown
       #endif
     }
 

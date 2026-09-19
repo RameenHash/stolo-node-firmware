@@ -20,15 +20,19 @@ default-deny, on sensitive reads as well as mutations.
 | Role | Who | May |
 |---|---|---|
 | **Owner** | A session that completed AUTH on *this* connection, for the *current* ownership generation | Everything. |
-| **Compat** | Build/product proposal (a), enabled by `STOLO_ENABLE_FACTORY_COMPAT=1`: readable store, unowned, persistent `ever_enrolled` false, and USB or encrypted/bonded BLE. Never WiFi. Ends at the first ENROLL. | Upstream behaviour, so a stock client can configure a brand-new radio. |
+| **Compat** | Decided once-only factory compat, enabled by default (`STOLO_ENABLE_FACTORY_COMPAT=1`): readable store, unowned, persistent `ever_enrolled` false, and USB or encrypted/bonded BLE. Never WiFi. Ends at the first ENROLL. | Upstream behaviour, so a stock client can configure a brand-new radio. |
 | **Guest** | Everyone else, including every bonded phone on an owned node and every USB host on an owned node | Data frames; SCP HELLO, GET_RADIO, GET_FAULTS; legacy telemetry and identity reads (`CMD_STAT_*`, `FW_VERSION`, `PLATFORM`, `MCU`, `BOARD`, `DETECT`, `READY`, `HASHES`, `DEV_HASH`, `RANDOM`, `BLINK`). A legacy radio-parameter write is answered with the **current** value (a stock RNS then fails its own validation cleanly). Everything else is dropped — including `CFG_READ` and `ROM_READ`, which carry the WiFi credential. |
 
-Session resets abort the KISS command, frame length, escape state, SCP
-receive buffer, unfinished data frame and shared input FIFO. Source changes
+Connection boundaries abort both KISS parsers, their SCP receive buffers,
+and the unfinished NUS/serial data frame and shared serial input FIFO.
+BLE callbacks clear the CTRL queue and post a boundary flag: authority is
+revoked immediately and parser/session teardown happens in the firmware loop.
+CTRL HELLO and SCP LEAVE reset authority without truncating an in-flight NUS
+frame; legacy payload/mutation checks still use the resulting role. Source changes
 flush queued old-source bytes before admitting new-source bytes. Legacy
 handlers re-check the role at payload processing and mutation boundaries.
 A session ends on BLE disconnect, WiFi close/timeout, input-source change,
-`CMD_LEAVE`, an authorized `CMD_RESET`, a second HELLO, or ownership change.
+`CMD_LEAVE` or SCP LEAVE, an authorized `CMD_RESET`, a second HELLO, or ownership change.
 Idle expiry is 30 seconds for USB and ten minutes for BLE, checked before
 incoming traffic refreshes activity. Hosts keeping USB authority alive must
 send a request such as GET_RADIO every 10 seconds; HELLO clears authority.
@@ -42,14 +46,14 @@ sent and the driver reports no boundary. **Bench qualification must establish
 which events macOS/Linux/Windows emit for close/open, DTR changes, unplug and
 reset; immediate process-bound authority is not yet device qualified.**
 
-Compat remains a product proposal, not decided policy. Default proposal (a)
-is once-only factory compat; `STOLO_ENABLE_FACTORY_COMPAT=0` disables it.
-FORGET_OWNER retains `ever_enrolled` and credentials, so the unowned node is
-locked to SCP enrollment for configuration. Older records infer enrollment
-history from owner/epoch; the flag occupies a formerly reserved schema-1 byte.
-Alternative proposal (b), **not implemented**, is compat whenever unowned plus
-present host: that would restore legacy sensitive reads/writes after forget,
-including access to retained credentials. It needs a separate product decision.
+**Decided: once-only factory compat.** A never-enrolled node with a readable
+store accepts a present host (USB or encrypted/bonded BLE) until its first
+ENROLL. `STOLO_ENABLE_FACTORY_COMPAT` stays on by default; setting it to 0
+requires SCP enrollment from first boot. The persistent `ever_enrolled`
+marker means FORGET_OWNER never reopens compat, including after restart.
+FORGET_OWNER retains WiFi credentials; the now-unowned node is locked to SCP
+enrollment for configuration. Older records infer enrollment history from
+owner/epoch; the flag occupies a formerly reserved schema-1 byte.
 
 **Physical recovery** (replacing the owner of an owned node) is the
 boot-time enrollment window: hold the button while power is applied
@@ -76,8 +80,59 @@ ambiguous storage. OLED announcements and LED visibility need bench qualificatio
 | Transport | Carrier | Status |
 |---|---|---|
 | USB serial | KISS command byte `0x7A` (`CMD_STOLO`), the payload escaped like any KISS frame | implemented |
-| BLE | current KISS `0x7A` on encrypted/bonded serial GATT; dedicated CTRL / EVENT / BULK service planned | administration admitted only on the encrypted link |
+| BLE | KISS `0x7A` on the dedicated CTRL/EVENT service below; also accepted on NUS | implemented; encrypted/MITM link required; device qualification pending |
 | WiFi | raw KISS TCP currently carries public HELLO / GET_RADIO / GET_FAULTS only | AUTH, ENROLL, RESCUE, SETs, FORGET and sensitive reads return error 4; secure control port planned |
+
+### BLE Stolo Control Service
+
+A second primary service on the same single-host BLE server as NUS:
+
+| Role | UUID | Properties | Permissions |
+|---|---|---|---|
+| Service | `d8b6a9ad-bf50-45f0-997c-2b54d82bec2d` | Primary service | — |
+| CTRL, phone → node | `d8b6a9ad-bf50-45f0-997c-2b54d82bec2e` | Write with response only | `WRITE_ENC_MITM` |
+| EVENT, node → phone | `d8b6a9ad-bf50-45f0-997c-2b54d82bec2f` | Notify only | `READ_ENC_MITM`; CCCD has **both** `READ_ENC_MITM` and `WRITE_ENC_MITM` |
+| BULK | `d8b6a9ad-bf50-45f0-997c-2b54d82bec30` | Reserved; **not created** | OTA is out of scope |
+
+Only NUS is advertised. Discover the control service after connection and
+subscribe to EVENT before writing CTRL. The EVENT CCCD permissions are explicit:
+the pinned core's default BLE2902 descriptor is not secured by its parent
+characteristic's permissions. Read permission alone would not permit the
+subscription write.
+
+The bytes are the USB carrier unchanged: `FEND 0x7A <escaped SCP> FEND`.
+CTRL reassembles across ATT writes with its own parser/buffer; NUS keeps the
+serial KISS parser. A callback queues CTRL bytes under a critical section;
+the firmware loop consumes at most 64 bytes per tick and runs the shared
+SCP dispatcher. It never runs flash writes or link-ending operations in the
+BLE callback. Non-`0x7A` frames, invalid escapes and oversized carrier frames
+are discarded to the next FEND and counted by the saturating, boot-local
+`stolo_ctrl_parser.faults` diagnostic (not part of the reset-history GET_FAULTS
+wire body). RX overflow discards buffered bytes and resets reassembly; the
+client must retry after its request timeout. An ATT write response is **not**
+an SCP application acknowledgement.
+
+A scoped per-request reply sink sends all CTRL replies/errors to EVENT;
+USB/NUS requests keep the serial sink. EVENT frames use a separate output
+buffer, chunked to the negotiated ATT MTU minus 3, and are never placed on
+NUS TX. Pending output is abandoned when the BLE link generation changes.
+The event-send helper routes future unsolicited SCP events to EVENT when a
+BLE session exists; no unsolicited event types are introduced here.
+
+**One authority session per BLE link (D1).** AUTH on CTRL authorizes legacy
+KISS mutations on NUS from that same encrypted link. HELLO on either channel
+revokes prior authority. Disconnect, source change, ownership change, timeout
+or LEAVE ends it for both. SCP `0x7A` on NUS remains accepted (D2), with replies
+on NUS. BULK remains reserved (D3). These follow the brief's recommended
+assumptions. A bonded phone on an **owned** node is a guest until AUTH;
+never-enrolled factory nodes retain the decided compat exception.
+
+An app's Connections helper can HELLO/AUTH on CTRL, rebuild RNS over NUS,
+then send **SCP LEAVE (0x06)** and close its loopback control socket. Sending
+legacy KISS CMD_LEAVE on CTRL is invalid because CTRL accepts only `0x7A`.
+Closing that local socket alone is invisible to the firmware: it does not
+end the shared BLE session. The app must serialize its configuration sessions
+and send SCP LEAVE in cleanup, including failure paths.
 
 **USB is the local trust boundary**: possession of the cable/host grants access, not owner authority. Protect the local port from hostile processes; v2 transcripts alone do not authenticate a subsequent raw WiFi SET.
 
@@ -107,7 +162,8 @@ as not applied. An error is type `0x7F`: `[code][message…]`.
 ## Session and authorization
 
 - **HELLO (0x01)** → `[fw_len][fw…][rnode_maj][rnode_min][node_pub 32][flags][attest][owner_epoch u32][nonce 16][source]`.
-  Flags: bit0 owner enrolled, bit1 this session is the owner, bit2 enroll window open, bit3 config store OK, bit4 factory compat proposal (build enabled + never enrolled + unowned + present host). `attest` is 0 (advisory) until F8. `source` is 0 USB / 1 BLE / 2 WiFi. HELLO starts a session on this connection: a fresh single-use nonce and no authority.
+  Flags: bit0 owner enrolled, bit1 this session is the owner, bit2 enroll window open, bit3 config store OK, bit4 factory compat (build enabled + never enrolled + unowned + present host). `attest` is 0 (advisory) until F8. `source` is 0 USB / 1 BLE / 2 WiFi. HELLO starts a session on this connection: a fresh single-use nonce and no authority.
+- **LEAVE (0x06)** empty body → `[ok = 1]`. Ends the shared authority/challenge without disconnecting BLE or interrupting an in-flight NUS frame when sent on CTRL. Requires HELLO, not owner authority. A nonempty body returns error 1. Legacy CMD_LEAVE stays supported on USB/NUS.
 - **AUTH (0x02)** body: Ed25519 signature (64) by the owner key over
   `"stolo-auth-v2" || node_pub[32] || nonce[16] || owner_epoch(u32be) || source(u8)`.
   `node_pub` stops a challenge for node A being answered for node B under the same owner key; `source` binds the answer to the carrier it was issued on. Reply `[ok][role]` and, on success, a fresh `nonce[16]` so a following ENROLL (hand-over) needs no HELLO. The signed nonce is spent either way; after a rejected AUTH there is no live nonce until the next HELLO.
@@ -134,7 +190,7 @@ Ordinary configuration needs owner or enabled factory compat and a readable stor
 ## Bluetooth
 
 - **GET_BT (0x30)** (owner / compat) → `supported u8, bt_state u8, bonds u8, pairing_open u8, window_s u16, enabled u8`.
-- **SET_BT (0x31)** TLV: 1 pairing on/off, 2 debond-all, 3 window seconds (10–600, persisted), 4 BLE enabled on/off. Parsed and validated first; the pairing window and enabled preference are persisted with checked results. Pairing-open while connected, or combined with disable, is rejected. Reply: GET_BT layout with accepted enabled/pairing/bond-count targets, followed by `accepted_mask` and `flags` (bit0 runtime pending), type `0xB1`. `bt_state` is the pre-application observation. GET's enabled field reflects effective runtime state. Reply/drain precede enable/disable/pairing/debond actions. A later GET checks effective state; bond removal is asynchronous.
+- **SET_BT (0x31)** TLV: 1 pairing on/off, 2 debond-all, 3 window seconds (10–600, persisted), 4 BLE enabled on/off. Parsed and validated first; the pairing window and enabled preference are persisted with checked results. Pairing-open while connected, or combined with disable, is rejected (error 1). In particular, a phone cannot open pairing over its active CTRL link; setting the persisted window duration alone is allowed. Disconnect first and use the existing physical pairing flow, or configure pairing over USB while BLE is disconnected. Reply: GET_BT layout with accepted enabled/pairing/bond-count targets, followed by `accepted_mask` and `flags` (bit0 runtime pending), type `0xB1`. `bt_state` is the pre-application observation. GET's enabled field reflects effective runtime state. Reply/drain precede enable/disable/pairing/debond actions. A later GET checks effective state; bond removal is asynchronous.
 
 ## Faults
 
@@ -178,7 +234,7 @@ Radio runtime application and flash power-loss behavior still require bench work
 
 For SCP ENROLL, FORGET_OWNER, RESCUE, SET_BT and SET_WIFI, reply writes precede
 an explicit source drain, and drain precedes link-ending actions. BLE uses
-`bt_flush()` and a bounded 100 ms controller grace period. Notifications provide
+`bt_flush()` for NUS or immediate notification submission for EVENT, followed by a bounded 100 ms controller grace period. Notifications provide
 no peer acknowledgement here; this is an attempted drain, **not delivery proof**.
 WiFi uses `connection.flush()` (the pinned ESP32 API flushes receive buffering;
 TCP output acceptance is not peer receipt), and USB uses `Serial.flush()`.
@@ -199,7 +255,7 @@ dependencies; NRF's Git library remains pinned to its commit.
 
 This table covers every `command == CMD_*` branch in `serial_callback`.
 Unless marked guest, configuration mutations and sensitive reads require owner
-or the enabled factory-compat proposal. The default for unlisted commands is
+or the enabled once-only factory compat policy. The default for unlisted commands is
 guest deny. Payloads below describe actual handlers, not command names alone.
 
 | Commands (`CMD_` prefix) | Handler behavior / payload | Guest policy |
@@ -254,7 +310,13 @@ transport transitions, partial/queued frames, mutation role rechecks, owner
 RESET and guest DEV_SIG, individual NVS/EEPROM failures, restart snapshots,
 record-size/metadata recovery, accepted SET replies, drain/action call order,
 entropy lifecycle, compat including a disabled-switch build, carrier admission,
-and physical-window rescue/retry. This is **software verified** with hardware,
+and physical-window rescue/retry. CTRL tests cover separate parser/buffer/sink
+routing, interleaving in both directions, guest/owner and shared NUS authority,
+SCP LEAVE, carrier rejection/recovery, disconnect/idle expiry, generation
+changes, unsolicited routing, and EVENT reply/action ordering. Extracted
+BLESerial methods test GATT/CCCD permission declarations, NUS-only advertising,
+MTU chunking, subscription gating and RX overflow/reconnect cleanup against a
+fake stack. This is **software verified** with hardware,
 NVS, entropy/DRBG, Ed25519 and transport fakes. Signature validity, callback
 scheduling, reply receipt, entropy quality, USB driver close semantics and power
 interruption on real flash are **not device qualified** in this round.

@@ -814,10 +814,38 @@ void transmit(uint16_t size) {
 #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
 void stolo_rescue_announce(uint8_t flashes) { led_indicate_info(flashes); }
 
+uint32_t stolo_ble_link_generation() {
+  #if HAS_BLE
+    return SerialBT.controlGeneration();
+  #else
+    return 0;
+  #endif
+}
+
+void stolo_ble_event_send(const uint8_t* bytes, size_t len, uint32_t link) {
+  #if HAS_BLE
+    SerialBT.writeControl(bytes, len, link);
+  #endif
+}
+
+void stolo_ctrl_poll() {
+  #if HAS_BLE
+    stolo_poll_session();
+    // Bounded work per tick so CTRL cannot starve NUS/radio housekeeping.
+    for (unsigned i = 0; i < 64; ++i) {
+      uint32_t link; int byte = SerialBT.readControl(&link);
+      if (byte == -1) break;
+      if (byte == -2) { stolo_ctrl_abort(); stolo_ctrl_fault(); continue; }
+      stolo_ctrl_feed((uint8_t)byte, link);
+    }
+  #endif
+}
+
 void stolo_transport_drain() {
   #if HAS_BLE
     if (stolo_session.source == STOLO_SRC_BLE) {
-      bt_flush();
+      if (stolo_reply_sink != STOLO_REPLY_EVENT) bt_flush();
+      // EVENT is submitted immediately; NUS has its own transmit buffer.
       // BLE notify has no peer acknowledgement in this API. Give the
       // controller a bounded transmit grace period; bench delivery is pending.
       delay(100);
@@ -1901,6 +1929,9 @@ void loop() {
   #if MCU_VARIANT == MCU_ESP32 || MCU_VARIANT == MCU_NRF52
       buffer_serial();
       if (!fifo_isempty(&serialFIFO)) serial_poll();
+      #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+        stolo_ctrl_poll();
+      #endif
   #else
     if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
   #endif

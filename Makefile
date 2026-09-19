@@ -558,6 +558,10 @@ test-host:
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -o build/host/compat_disabled_test Tests/host/compat_disabled_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=1 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_hw_test Tests/host/transport_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=0 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_tiny_test Tests/host/transport_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/control_test Tests/host/control_test.cpp
+	g++ -std=c++17 -Wall -Ibuild/host -o build/host/ble_control_test Tests/host/ble_control_test.cpp
+	./build/host/ble_control_test
+	./build/host/control_test
 	./build/host/transport_hw_test
 	./build/host/transport_tiny_test
 	python3 Tests/host/tool_test.py

@@ -8,8 +8,8 @@
 // One message set, carried here inside a single KISS vendor command byte
 // (CMD_STOLO 0x7A). A stock host never sees it: nothing is sent on 0x7A
 // until the host has said HELLO, and a stock RNS discards an unknown
-// command byte to the next FEND. The same messages will ride a separate
-// BLE GATT service and the WiFi control port later; the dispatcher below
+// command byte to the next FEND. The same messages also ride the separate
+// BLE CTRL/EVENT service, and a future WiFi control port; the dispatcher below
 // is the one they share.
 //
 // Wire format inside the frame:   [ver=2][type][seq][body...]
@@ -61,6 +61,7 @@ void setCodingRate(); void setTXPower(); bool startRadio(); void stopRadio();
 #define SCP_ENROLL        0x03
 #define SCP_FORGET_OWNER  0x04
 #define SCP_RESCUE        0x05
+#define SCP_LEAVE         0x06   // end authority without closing the BLE data link
 #define SCP_GET_RADIO     0x10
 #define SCP_SET_RADIO     0x11
 #define SCP_GET_WIFI      0x20
@@ -159,6 +160,16 @@ uint16_t stolo_rx_len = 0;
 bool     stolo_rx_overflow = false;
 uint32_t stolo_enroll_window_until = 0;
 volatile bool stolo_usb_boundary_pending = false;
+volatile bool stolo_ble_boundary_pending = false;
+
+// Only the firmware loop dispatches requests. A scoped sink survives HELLO,
+// ownership changes and LEAVE, which reset the session while replying.
+enum StoloReplySink { STOLO_REPLY_SERIAL, STOLO_REPLY_EVENT };
+StoloReplySink stolo_reply_sink = STOLO_REPLY_SERIAL;
+uint32_t stolo_reply_link = 0;
+void stolo_ctrl_abort();
+uint32_t stolo_ble_link_generation();
+void stolo_ble_event_send(const uint8_t* bytes, size_t len, uint32_t link);
 
 bool stolo_enroll_window_open() {
   return stolo_enroll_window_until != 0 && (int32_t)(stolo_enroll_window_until - millis()) > 0;
@@ -166,10 +177,13 @@ bool stolo_enroll_window_open() {
 
 // A connection boundary: everything the previous host earned is gone.
 void stolo_parser_abort();  // .ino: parser and queued bytes share the session boundary
-void stolo_session_reset(uint8_t source) {
-  stolo_parser_abort();
-  stolo_rx_len = 0;
-  stolo_rx_overflow = false;
+void stolo_session_reset(uint8_t source, bool abort_parsers = true) {
+  if (abort_parsers) {
+    stolo_parser_abort();
+    stolo_ctrl_abort();
+    stolo_rx_len = 0;
+    stolo_rx_overflow = false;
+  }
   stolo_conn_generation++;
   memset(&stolo_session, 0, sizeof(stolo_session));
   stolo_session.generation = stolo_conn_generation;
@@ -179,12 +193,13 @@ void stolo_session_reset(uint8_t source) {
 
 // Called by buffer_serial for every byte's origin. A change of source is
 // a change of host: two successive WiFi clients share a label, so the
-// WiFi and BLE layers ALSO call stolo_host_disconnected() on close.
+// WiFi calls stolo_host_disconnected() on close; BLE posts an atomic
+// boundary that the loop turns into the same teardown.
 void stolo_note_source(uint8_t source) {
   if (source != stolo_session.source) stolo_session_reset(source);
 }
 
-// Called on BLE disconnect, WiFi client close/timeout, CMD_LEAVE, CMD_RESET.
+// Loop-side teardown on BLE boundary, WiFi close/timeout, LEAVE and RESET.
 void stolo_host_disconnected() {
   stolo_session_reset(stolo_session.source);
 }
@@ -192,10 +207,16 @@ void stolo_host_disconnected() {
 // USB event task only posts a flag; parser/FIFO state belongs to the loop.
 void stolo_usb_connection_boundary() { __atomic_store_n(&stolo_usb_boundary_pending, true, __ATOMIC_RELEASE); }
 
+// BLE callbacks revoke authority immediately, but never mutate loop-owned
+// parser/session memory. Even a disconnect/reconnect between loop ticks is seen.
+void stolo_ble_connection_boundary() { __atomic_store_n(&stolo_ble_boundary_pending, true, __ATOMIC_RELEASE); }
+
 bool stolo_poll_session() {
   bool boundary = __atomic_exchange_n(&stolo_usb_boundary_pending, false, __ATOMIC_ACQ_REL);
+  bool ble_boundary = __atomic_exchange_n(&stolo_ble_boundary_pending, false, __ATOMIC_ACQ_REL);
   uint32_t timeout = stolo_session.source == STOLO_SRC_USB ? STOLO_USB_SESSION_IDLE_MS : STOLO_SESSION_IDLE_MS;
   if ((boundary && stolo_session.source == STOLO_SRC_USB)
+      || (ble_boundary && stolo_session.source == STOLO_SRC_BLE)
       || (stolo_session.authorized && (uint32_t)(millis() - stolo_session.last_activity) > timeout)) {
     stolo_host_disconnected();
     return true;
@@ -205,7 +226,8 @@ bool stolo_poll_session() {
 
 bool stolo_host_is_present();
 bool stolo_is_owner() {
-  return stolo_host_is_present() && !__atomic_load_n(&stolo_usb_boundary_pending, __ATOMIC_ACQUIRE) && stolo_store_ok && stolo_session.authorized
+  return stolo_host_is_present() && !__atomic_load_n(&stolo_usb_boundary_pending, __ATOMIC_ACQUIRE)
+      && !__atomic_load_n(&stolo_ble_boundary_pending, __ATOMIC_ACQUIRE) && stolo_store_ok && stolo_session.authorized
       && stolo_session.generation == stolo_conn_generation
       && stolo_cfg.owner_enrolled
       && stolo_session.auth_epoch == stolo_cfg.owner_epoch;
@@ -234,6 +256,21 @@ bool stolo_may_configure() { return stolo_store_ok && stolo_role() != STOLO_ROLE
 
 // ── writing replies ─────────────────────────────────────────────────────
 void stolo_scp_send(uint8_t type, uint8_t seq, const uint8_t* body, uint16_t len) {
+  if (stolo_reply_sink == STOLO_REPLY_EVENT) {
+    // Worst case: every payload byte is escaped. No shared NUS TX buffer.
+    if (len > STOLO_MSG_MAX - 3) return;
+    uint8_t frame[2 * STOLO_MSG_MAX + 3]; size_t n = 0;
+    frame[n++] = FEND; frame[n++] = CMD_STOLO;
+    auto escaped = [&](uint8_t b) {
+      if (b == FEND || b == FESC) { frame[n++] = FESC; frame[n++] = b == FEND ? TFEND : TFESC; }
+      else frame[n++] = b;
+    };
+    escaped(SCP_VERSION); escaped(type); escaped(seq);
+    for (uint16_t i = 0; i < len; ++i) escaped(body[i]);
+    frame[n++] = FEND;
+    stolo_ble_event_send(frame, n, stolo_reply_link);
+    return;
+  }
   serial_write(FEND);
   serial_write(CMD_STOLO);
   escaped_serial_write(SCP_VERSION);
@@ -292,7 +329,9 @@ void stolo_reply_hello(uint8_t seq) {
 
 // HELLO opens a session on THIS connection: fresh nonce, no authority.
 void stolo_handle_hello(uint8_t seq) {
-  stolo_session_reset(stolo_session.source);
+  // HELLO on CTRL resets authority, not an in-flight NUS frame. Both
+  // characteristics still share the new nonce and connection authority.
+  stolo_session_reset(stolo_session.source, stolo_reply_sink != STOLO_REPLY_EVENT);
   if (!stolo_random_fill(stolo_session.nonce, sizeof(stolo_session.nonce))) {
     stolo_session_reset(stolo_session.source);
     stolo_scp_error(seq, SCP_ERR_RECOVERY, "random generator unavailable"); return;
@@ -657,12 +696,12 @@ void stolo_scp_rx_byte(uint8_t b) {
   if (stolo_rx_len < STOLO_MSG_MAX) stolo_rx[stolo_rx_len++] = b; else stolo_rx_overflow = true;
 }
 
-void stolo_scp_frame_end() {
+void stolo_scp_dispatch(const uint8_t* rx, uint16_t rx_len, bool overflow) {
   if (stolo_poll_session()) return;
   stolo_session.last_activity = millis();
-  if (stolo_rx_overflow || stolo_rx_len < 3) { stolo_scp_error(0, SCP_ERR_BAD_REQUEST, "malformed SCP frame"); return; }
-  uint8_t ver = stolo_rx[0], type = stolo_rx[1], seq = stolo_rx[2];
-  const uint8_t* body = stolo_rx + 3; uint16_t len = stolo_rx_len - 3;
+  if (overflow || rx_len < 3) { stolo_scp_error(0, SCP_ERR_BAD_REQUEST, "malformed SCP frame"); return; }
+  uint8_t ver = rx[0], type = rx[1], seq = rx[2];
+  const uint8_t* body = rx + 3; uint16_t len = rx_len - 3;
   if (ver != SCP_VERSION) { stolo_scp_error(seq, SCP_ERR_NOT_SUPPORTED, "SCP version 2 required"); return; }
   // Raw WiFi KISS is not a protected control carrier. Only public reads
   // may use it. BLE administration requires the encrypted/bonded link.
@@ -673,6 +712,12 @@ void stolo_scp_frame_end() {
   bool privileged = stolo_role() != STOLO_ROLE_GUEST;
   switch (type) {
     case SCP_HELLO:        stolo_handle_hello(seq); break;
+    case SCP_LEAVE: {
+      if (len != 0) { stolo_scp_error(seq, SCP_ERR_BAD_REQUEST, "leave: empty body required"); break; }
+      uint8_t ok = 1; stolo_scp_send(SCP_LEAVE | SCP_REPLY, seq, &ok, 1);
+      stolo_session_reset(stolo_session.source, stolo_reply_sink != STOLO_REPLY_EVENT);
+      break;
+    }
     case SCP_AUTH:         stolo_handle_auth(seq, body, len); break;
     case SCP_ENROLL:       stolo_handle_enroll(seq, body, len); break;
     case SCP_FORGET_OWNER: stolo_handle_forget_owner(seq); break;
@@ -687,6 +732,12 @@ void stolo_scp_frame_end() {
     default:               stolo_scp_error(seq, SCP_ERR_NOT_SUPPORTED, "unknown SCP type"); break;
   }
 }
+
+void stolo_scp_frame_end() {
+  stolo_scp_dispatch(stolo_rx, stolo_rx_len, stolo_rx_overflow);
+}
+
+#include "StoloControl.h"
 
 // ── the legacy KISS command policy ──────────────────────────────────────
 // Default-deny. Owner and compat keep upstream's behaviour. A guest gets

@@ -11,11 +11,13 @@ The extracted files are generated under ignored `build/host/`.
 
 | Suite | Coverage |
 |---|---|
+| `control_test.cpp` | Real CTRL parser + SCP dispatcher + NUS dispatcher: routing, escaping, interleaving, authorization, lifecycle, overflow/malformed recovery, shared-session LEAVE and EVENT action ordering |
+| `ble_control_test.cpp` | Extracted production BLESerial GATT setup, FIFO, RX callbacks and EVENT sender: permissions, advertisement, MTU chunks, queue overflow, generation and subscription boundaries (fake stack) |
 | `dispatcher_test.cpp` | C1: every pair of source transitions, queued bytes, SCP/escape state, mid-frame disconnect, mutation role check, authorized positive case |
 | `store_test.cpp` | C2/C3: slot/floor/activation write faults and restart snapshots, pre-floor upgrade, oversized/truncated slots, missing activation, namespace/read/length errors |
 | `corrections_test.cpp` | C4–C11 via the production KISS byte dispatcher: USB expiry/keepalive, RESET/DEV_SIG/LEAVE effects, accepted/pending SET fields, persistence errors, drain/action order, ever-enrolled lock, WiFi/unencrypted BLE refusal, rescue and each rescue write/remove fault |
 | `persistence_test.cpp` | C5: real EEPROM helper failure propagation, dirty cached byte retry, enabled preference update |
-| `transport_test.cpp` | C4/C6: real USB event hook under both USB modes; real BLE flush/100 ms grace period ordering; USB/WiFi flush paths |
+| `transport_test.cpp` | C4/C6: real USB event hook under both USB modes; real BLE flush/100 ms grace period ordering; USB/WiFi flush paths; EVENT submission/grace/action order without flushing NUS |
 | `compat_disabled_test.cpp` | C10: separate build with factory compat disabled still supports SCP enrollment |
 | `tool_test.py` | C4/C5/C8: LEAVE/flush/close, lost-device close, pending SET decoding, rescue token/new-key result |
 | `authority_test.cpp` | Existing authority, transcript, nonce, radio policy and validation regressions |

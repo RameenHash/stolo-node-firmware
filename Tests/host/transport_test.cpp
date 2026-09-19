@@ -16,6 +16,11 @@ int main() {
   scp(SCP_SET_BT,{SCP_B_ENABLED,1,0});
   auto pos=[](const char* c) { return std::find(calls.begin(),calls.end(),c)-calls.begin(); };
   CHECK(called("bt_flush") && called("delay:100") && pos("bt_flush")<pos("delay:100") && pos("delay:100")<pos("bt_stop"), "BLE flush plus bounded grace period precedes stop");
+  bt_enabled=true; stolo_reply_sink=STOLO_REPLY_EVENT; stolo_reply_link=fake_ble_link;
+  reset_out(); stolo_handle_set_bt(1,(const uint8_t*)"\x04\x01\x00",3);
+  CHECK(called("event_write") && !called("bt_flush") && called("delay:100")
+    && pos("event_write")<pos("delay:100") && pos("delay:100")<pos("bt_stop"), "EVENT submission plus grace period before stop, no NUS flush");
+  stolo_reply_sink=STOLO_REPLY_SERIAL;
   as_source(STOLO_SRC_WIFI); reset_out(); stolo_transport_drain(); CHECK(called("wifi_flush"), "WiFi flush hook");
   as_source(STOLO_SRC_USB); reset_out(); stolo_transport_drain(); CHECK(called("usb_flush"), "USB flush hook");
   arduino_usb_cdc_event_data_t data={{false,false}};
