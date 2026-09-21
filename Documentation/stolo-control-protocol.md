@@ -74,8 +74,12 @@ Six info-LED flashes announce the destructive operation before its writes.
 The lower OLED band shows `RESCUE` with a countdown while RECOVERY and the
 window are active, `NEW IDENTITY` for 5 seconds after successful RESCUE, and
 `STORE ERROR / HOLD BTN / AT BOOT` persistently when RECOVERY has no window.
-A pairing PIN takes priority over every notice; otherwise the existing
-radio/airtime panel is used. Notice state is read-only to the renderer.
+A pairing PIN takes priority over every Stolo notice. A simultaneous
+firmware/radio/config fault is shown in the upper area so the lower PIN or
+notice cannot hide it. Without a Stolo notice, faults retain their original
+lower-band priority, including over pairing in plain builds; otherwise the
+existing radio/airtime panel is used. Countdown rendering saturates at 99
+seconds if a future window exceeds the two-digit display range. Notice state is read-only to the renderer.
 The new node stays SCP-enrollment-only (unknown history means ever-enrolled).
 Existing app identity bindings must be discarded and the new public key
 reviewed before enrollment. No automatic identity replacement is attempted on

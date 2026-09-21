@@ -34,6 +34,9 @@ with T-Beam Supreme photos and host-tool output attached to the PR thread:
       AT BOOT. Hold at boot: RESCUE and countdown. Explicitly run RESCUE on the
       test unit: NEW IDENTITY for 5 seconds, then the normal panel. Confirm the
       host tool observes the new identity. Rescue deliberately replaces identity.
+- [ ] A simultaneous firmware/radio/config fault remains visible above each
+      Stolo notice, including persistent STORE ERROR and pairing. Without a
+      Stolo notice (and in plain builds), faults retain the lower-band priority.
 - [ ] Pairing PIN wins over enrollment, rescue, success and store-error notices;
       six digits remain legible. Notice priority also holds with an external
       framebuffer and automatic display blanking enabled.

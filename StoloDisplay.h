@@ -9,6 +9,12 @@ enum StoloBannerKind {
 };
 struct StoloBanner { StoloBannerKind kind; uint8_t seconds; };
 
+// Keep faults visible alongside Stolo notices. Plain builds pass false and
+// retain the upstream lower-band error precedence, including over pairing.
+inline int8_t stolo_fault_y(bool hardware_fault, bool priority_notice) {
+  return !hardware_fault ? -1 : priority_notice ? 0 : 37;
+}
+
 // Window-open comes from the protocol, so display code never grants presence.
 // Unsigned subtraction also handles deadlines/timestamps crossing millis wrap.
 inline StoloBanner stolo_select_banner(uint32_t now, bool pairing_pin,
@@ -16,8 +22,9 @@ inline StoloBanner stolo_select_banner(uint32_t now, bool pairing_pin,
     bool identity_notice, uint32_t identity_since) {
   if (pairing_pin) return {STOLO_BANNER_PAIRING, 0};
   const uint32_t remaining = window_until - now;
+  // Saturate before narrowing: the renderer has exactly two decimal glyphs.
   const uint8_t seconds = window_open && (int32_t)remaining > 0
-      ? (uint8_t)((remaining + 999) / 1000) : 0;
+      ? (uint8_t)(remaining > 99000 ? 99 : (remaining + 999) / 1000) : 0;
   if (recovery && window_open) return {STOLO_BANNER_RESCUE, seconds};
   if (identity_notice && (uint32_t)(now - identity_since) < 5000)
     return {STOLO_BANNER_NEW_IDENTITY, 0};

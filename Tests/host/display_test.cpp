@@ -19,7 +19,25 @@ static void priorities() {
         }
 }
 
+static void fault_visibility() {
+  for (auto kind : {STOLO_BANNER_RADIO, STOLO_BANNER_PAIRING, STOLO_BANNER_RESCUE,
+                   STOLO_BANNER_NEW_IDENTITY, STOLO_BANNER_ENROLL, STOLO_BANNER_STORE_ERROR}) {
+    const bool active = kind != STOLO_BANNER_RADIO;
+    CHECK(stolo_fault_y(false, active) == -1, "no fault leaves normal upper content intact");
+    CHECK(stolo_fault_y(true, active) == (active ? 0 : 37), "every Stolo notice retains a visible concurrent fault");
+  }
+  CHECK(stolo_fault_y(true, false) == 37, "plain build faults retain lower-band precedence over pairing");
+}
+
 static void timing() {
+  for (uint32_t remaining : {98999u, 99000u, 99001u, 100000u, 255001u, 256000u, 3600000u, uint32_t(INT32_MAX)}) {
+    for (bool recovery : {false, true}) {
+      const uint32_t now = UINT32_MAX - 500;
+      auto b = stolo_select_banner(now, false, recovery, true, now + remaining, false, 0);
+      CHECK(b.seconds == 99, "long enrollment/rescue countdown saturates before narrowing to byte");
+      CHECK(b.seconds / 10 < 10 && b.seconds % 10 < 10, "both countdown glyph indices stay inside digit table");
+    }
+  }
   const uint32_t start = UINT32_MAX - 30000;
   const uint32_t end = start + 60000;
   for (uint32_t elapsed : {0u, 1u, 999u, 1000u, 30000u, 59999u, 60000u, 60001u}) {
@@ -74,7 +92,7 @@ static void protocol() {
 }
 
 int main() {
-  priorities(); timing(); protocol();
+  priorities(); fault_visibility(); timing(); protocol();
   printf("OLED (HAS_DISPLAY=%d): %d passed, %d failed\n", HAS_DISPLAY, passes, failures);
   return failures ? 1 : 0;
 }
