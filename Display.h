@@ -1,3 +1,4 @@
+// Modified by Stolo Systems Inc., 2026-09-21 — optional buffered BLE bench trace.
 // Copyright (C) 2024, Mark Qvist
 // Modified by Stolo Systems Inc., 2026-09-19 — Stolo branding and F8 banners.
 // Modified by Stolo Systems Inc., 2026-09-21 — retain simultaneous fault visibility.
@@ -841,6 +842,18 @@ void draw_disp_fault(uint8_t y) {
 }
 
 void draw_disp_area() {
+  #if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
+    // Render-path evidence, never a claim that the physical OLED was readable.
+    static uint32_t last_trace_pin = UINT32_MAX;
+    static uint16_t last_trace_flags = UINT16_MAX;
+    uint16_t flags = (device_init_done ? 1 : 0) | (firmware_update_mode ? 2 : 0)
+        | (disp_ext_fb ? 4 : 0) | (radio_online && display_diagnostics ? 8 : 0)
+        | (bt_state << 4) | (device_firmware_ok() ? 256 : 0);
+    if (last_trace_flags != flags || last_trace_pin != bt_ssp_pin) {
+      STOLO_BT_TRACE("display.path", flags);
+      last_trace_flags = flags; last_trace_pin = bt_ssp_pin;
+    }
+  #endif
   #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
     const StoloBanner banner = stolo_current_banner(millis(), bt_state == BT_STATE_PAIRING && bt_ssp_pin != 0);
     const bool stolo_banner_active = banner.kind != STOLO_BANNER_RADIO;

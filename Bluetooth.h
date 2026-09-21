@@ -184,13 +184,55 @@ char bt_devname[11];
     // Modified by Stolo Systems Inc., 2026-09-21 — instrument before fixing.
     #if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
       extern volatile bool stolo_ble_boundary_pending;
+      struct StoloBleTraceRecord {
+        const char* event;
+        uint32_t time, detail, sequence;
+        uint8_t state, allow, authenticated, pin_present, boundary;
+        int bonds;
+      };
+      static StoloBleTraceRecord stolo_ble_trace_queue[64];
+      static uint32_t stolo_ble_trace_head = 0, stolo_ble_trace_tail = 0;
+      static uint32_t stolo_ble_trace_sequence = 0, stolo_ble_trace_dropped = 0;
+      static portMUX_TYPE stolo_ble_trace_mux = portMUX_INITIALIZER_UNLOCKED;
+
+      // Capture in the BLE task; only the firmware loop writes diagnostic USB.
+      // Sequence gaps/drop count make an incomplete capture explicit.
       void stolo_ble_trace(const char* event, uint32_t detail) {
-        Serial.printf("[BLETRACE t=%lu] %s detail=0x%lx state=%u allow=%u auth=%u pin_present=%u boundary=%u bonds=%d\n",
-            (unsigned long)millis(), event, (unsigned long)detail,
-            (unsigned)bt_state, (unsigned)bt_allow_pairing, (unsigned)ble_authenticated,
-            (unsigned)(bt_ssp_pin != 0),
-            (unsigned)__atomic_load_n(&stolo_ble_boundary_pending, __ATOMIC_ACQUIRE),
-            esp_ble_get_bond_device_num());
+        StoloBleTraceRecord record = {event, millis(), detail, 0, bt_state,
+            bt_allow_pairing, ble_authenticated, bt_ssp_pin != 0,
+            __atomic_load_n(&stolo_ble_boundary_pending, __ATOMIC_ACQUIRE),
+            esp_ble_get_bond_device_num()};
+        portENTER_CRITICAL(&stolo_ble_trace_mux);
+        record.sequence = ++stolo_ble_trace_sequence;
+        if (stolo_ble_trace_head - stolo_ble_trace_tail < 64) {
+          stolo_ble_trace_queue[stolo_ble_trace_head++ % 64] = record;
+        } else { ++stolo_ble_trace_dropped; }
+        portEXIT_CRITICAL(&stolo_ble_trace_mux);
+      }
+
+      void stolo_ble_trace_drain() {
+        for (unsigned i = 0; i < 8; ++i) {
+          portENTER_CRITICAL(&stolo_ble_trace_mux);
+          if (stolo_ble_trace_head == stolo_ble_trace_tail) {
+            portEXIT_CRITICAL(&stolo_ble_trace_mux);
+            return;
+          }
+          StoloBleTraceRecord r = stolo_ble_trace_queue[stolo_ble_trace_tail % 64];
+          uint32_t dropped = stolo_ble_trace_dropped;
+          portEXIT_CRITICAL(&stolo_ble_trace_mux);
+          char line[256];
+          int length = snprintf(line, sizeof(line),
+              "[BLETRACE t=%lu seq=%lu radio=%02X%02X drop=%lu] %s detail=0x%lx state=%u allow=%u auth=%u pin_present=%u boundary=%u bonds=%d\n",
+              (unsigned long)r.time, (unsigned long)r.sequence,
+              (unsigned char)bt_dh[14], (unsigned char)bt_dh[15], (unsigned long)dropped,
+              r.event, (unsigned long)r.detail, r.state, r.allow, r.authenticated,
+              r.pin_present, r.boundary, r.bonds);
+          if (length <= 0 || length >= (int)sizeof(line) || Serial.availableForWrite() < length) return;
+          Serial.write((const uint8_t*)line, length);
+          portENTER_CRITICAL(&stolo_ble_trace_mux);
+          ++stolo_ble_trace_tail;
+          portEXIT_CRITICAL(&stolo_ble_trace_mux);
+        }
       }
     #endif
 

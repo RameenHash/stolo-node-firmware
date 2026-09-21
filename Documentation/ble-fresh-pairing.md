@@ -12,10 +12,19 @@ exclusive serial recorder at 115200 baud during a pairing attempt; do not
 attach RNS or a configuration client concurrently.
 
 **Software verified:** each `[BLETRACE]` record includes milliseconds since
-boot, event, hexadecimal detail, Bluetooth state (`0` off, `1` on, `2` pairing,
+boot, sequence, radio-name suffix, cumulative dropped-record count, event, hexadecimal detail, Bluetooth state (`0` off, `1` on, `2` pairing,
 `3` connected), pairing permission, application authentication, whether a
 passkey is present, pending BLE boundary and radio bond count. No passkey,
-peer address, key or application payload is printed.
+peer address, key or application payload is printed by the diagnostic logger.
+The existing KISS stream can contain the passkey; retain raw USB capture locally
+and publish only diagnostic records.
+
+**Software verified:** callbacks enqueue bounded records; the firmware loop
+drains complete lines only when USB has buffer space. Sequence gaps and the
+dropped-record count identify an incomplete capture. `display.path` records
+render inputs, not physical OLED visibility: bit 0 initialized, bit 1 update
+mode, bit 2 external framebuffer, bit 3 radio diagnostics, bits 4–5 Bluetooth
+state, bit 8 valid firmware hash.
 
 **Software verified:** callback entry/exit records bracket `resetControl`,
 `onConnect`, `onDisconnect`, and `stolo_host_disconnected`. The boundary-poll

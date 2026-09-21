@@ -44,3 +44,9 @@ for name in ('SetupControlService', 'resetControl', 'controlGeneration',
         raise SystemExit(f'missing production BLE method: {name}')
     parts.append(match.group())
 Path('build/host/ble_control.h').write_text('\n\n'.join(parts)+'\n')
+
+# Trace queue and USB drain, compiled with a fake serial sink.
+source = Path('Bluetooth.h').read_text()
+start = source.index('      struct StoloBleTraceRecord {')
+end = source.index('\n    #endif', start)
+Path('build/host/ble_trace.h').write_text(source[start:end] + '\n')
