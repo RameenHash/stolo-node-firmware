@@ -1,0 +1,29 @@
+# software verified: USB diagnostic records; device qualified: none
+# First instrumentation capture; several USB lines are truncated. No missing text reconstructed.
+# Binary SHA256: 315ebcddf04bf24b038a2e1d43765921814f8125a9058d825f4b33df54eb1152
+2026-09-21T12:51:46.137381+00:00 [BLETRACE t=423167] onConnect.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:51:46.137912+00:00 [BLETRACE t=423167] resetControl.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:51:46.137995+00:00 [BLETRACE t=423168] resetControl.exit detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:51:46.138018+00:00 [BLETRACE t=423168] bt_connect.boundary detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:51:46.138039+00:00 [BLETRACE t=423168] onConnect.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-21T12:51:46.138058+00:00 [BLETRACE t=423168] gatts.connect.conn_id detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-21T12:51:46.163433+00:00 [BLETRACE t=423194] stolo_poll_session.boundaries detail=0x2 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:51:46.404225+00:00 [BLETRACE t=423434] gap.event detail=0x37 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+{\x9c\xc0[BLETRACE t=424052] gap [BLETRACE t=424052] gap.event detail=0xb state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:51:47.186039+00:00 [BLETRACE t=424216] gatts.write.handle detail=0x2e state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:52:02.639055+00:00 [BLETRACE t=439668] onAuthenticationComplete.success detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundaryail_reason detail=0x51 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:52:02.639909+00:00 [BLETRACE t=439669] onAuthenticationComplete.auth_mode detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:52:02.640205+00:00 [BLETRACE t=439670] bt_security_setup.enter detail=0x0 state=1 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:52:02.640270+00:00 [BLETRACE t=439670] security.config.auth_req detail=0xd state=1 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:52:02.640427+00:00 [BLETRACE t=439670] security.config.iocap detail=0x0 state=1 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:52:02.640921+00:00 [BLETRACE t=439671] onAuthenticationComplete.exit detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:52:02.640964+00:00 [BLETRACE t=439671] gap.event detail=0x8 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:53:04.197351+00:00 [BLETRACE t=501224] onDisconnect.enter detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:53:04.197429+00:00 [BLETRACE t=501225] resetControl.enter detail=0x1 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:53:04.197648+00:00 [BLETRACE t=501225] resetControl.exit detail=0x2 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:53:04.197707+00:00 [BLETRACE t=501225] bt_disconnect.boundary detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:53:04.198055+00:00 [BLETRACE t=501225] onDisconnect.exit detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:53:04.198364+00:00 [BLETRACE t=501226] gatts.disconnect.reason detail=0x13 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:53:04.202363+00:00 [BLETRACE t=501230] gap.event detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:53:04.202537+00:00 [BLETRACE t=501230] gap.event detail=0x1 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=[BLETRACE t=501230] gap.event detail=0x6 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:53:04.221524+00:00 [BLETRACE t=501249] stolo_poll_session.boundaries detail=0x2 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0

@@ -66,3 +66,50 @@ cannot satisfy them.
 
 **Software verified:** any iOS bridge change belongs in a separate fork PR;
 this firmware PR does not modify either app repository.
+
+## Captured before behavior changes, 2026-09-21
+
+**Software verified (USB capture interpretation; device qualified: none):**
+The attached `/dev/cu.usbmodem1101` radio identifies itself as `11DE`. Rameen
+reported a rapidly failing code-entry prompt for `01BA`, but a stable prompt
+for `11DE`, no visible code, and disappearance of the radio's pairing screen
+after pressing Pair without entering a code. The captured radio is `11DE`;
+these records do not establish what happened on `01BA`.
+
+**Software verified:** the [first capture](traces/2026-09-21-11de-first.txt)
+has truncated lines, so absence of an event there is not conclusive. The
+[buffered repeat](traces/2026-09-21-11de-buffered.txt) records sequences 20–49
+continuously with `drop=0`: connect/control reset/deferred boundary keep
+`state=2 allow=1`; passkey notification arrives 885 ms after connect and
+matches the stored display PIN (`detail=1`); authentication fails later with
+`0x51`, and its callback changes the state to `1`, permission to `0`, PIN
+presence to `0`. No security-request rejection appears in that interval.
+Both captures record eventual peer termination (`0x13`): about 78 s
+after connect in the first, 85 s in the buffered repeat. This is not the reported ~0.7 s connect-time teardown.
+
+**Software verified:** in pinned ESP-IDF v4.4.7, auth reason `0x51` is
+`SMP_CONFIRM_VALUE_ERR (0x04)` plus the BTA offset `0x4d` (`0x43 + 10`),
+not HCI error `0x51`. Sources:
+[BTA mapping](https://github.com/espressif/esp-idf/blob/v4.4.7/components/bt/host/bluedroid/bta/include/bta/bta_api.h#L624-L629),
+[HCI maximum](https://github.com/espressif/esp-idf/blob/v4.4.7/components/bt/host/bluedroid/stack/include/stack/hcidefs.h#L815),
+[SMP reason](https://github.com/espressif/esp-idf/blob/v4.4.7/components/bt/host/bluedroid/stack/include/stack/smp_api.h#L67).
+A wrong/empty entered code is consistent with this failure; the reason does
+not explain why the OLED's code was not visible.
+
+**Software verified:** the buffered trace's display-path flags `0x121` mean
+initialized, valid firmware hash, pairing, without update mode, an external
+framebuffer or radio diagnostics. They establish software render inputs,
+not physical OLED visibility. The failure callback then changes them to
+`0x111` (Bluetooth on, no displayed pairing PIN).
+
+**Software verified:** the trace does not implicate an early EVENT CCCD
+write. Its protected descriptor is handle `0x3c`; the observed write delivered
+to the application is `0x2e`, and the stack rejects writes to `0x2a` for missing
+MITM authentication. Do not relax EVENT/CTRL permissions on this evidence.
+The iOS bridge remains outside this PR; further bridge evidence requires a
+separate fork PR.
+
+**Device qualified: none.** Missing evidence: physical OLED photo and correct
+code entry, successful iPhone bond, ready/settings, reconnect/recovery,
+original F3 checks and app log. Behavior fixes remain pending this evidence;
+this PR is an instrumentation/investigation draft.

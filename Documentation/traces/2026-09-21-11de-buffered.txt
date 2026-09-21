@@ -1,0 +1,87 @@
+# software verified: USB diagnostics from instrumentation-only firmware; device qualified: none
+# Binary SHA256: 31be3ce3af3f5bcdc3a4c58a174456313ca6d9b6ef82ca0c88ab3ac1b70daae0
+# Capture opened after boot; sequences 1-8 precede this recorder.
+2026-09-21T12:57:16.006592+00:00 USB capture opened: /dev/cu.usbmodem1101
+2026-09-21T12:57:16.007036+00:00 [BLETRACE t=776 seq=9 radio=11DE drop=0] event.handle detail=0x3b state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007054+00:00 [BLETRACE t=776 seq=10 radio=11DE drop=0] event.cccd.handle detail=0x3c state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007062+00:00 [BLETRACE t=777 seq=11 radio=11DE drop=0] bt_enable_pairing.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007070+00:00 [BLETRACE t=777 seq=12 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007077+00:00 [BLETRACE t=777 seq=13 radio=11DE drop=0] security.config.auth_req detail=0xd state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007095+00:00 [BLETRACE t=777 seq=14 radio=11DE drop=0] security.config.iocap detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007217+00:00 [BLETRACE t=777 seq=15 radio=11DE drop=0] bt_enable_pairing.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007296+00:00 [BLETRACE t=781 seq=16 radio=11DE drop=0] gap.event detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007448+00:00 [BLETRACE t=781 seq=17 radio=11DE drop=0] gap.event detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007606+00:00 [BLETRACE t=781 seq=18 radio=11DE drop=0] gap.event detail=0x6 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:57:16.007765+00:00 [BLETRACE t=961 seq=19 radio=11DE drop=0] display.path detail=0x121 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:00.285973+00:00 [BLETRACE t=50818 seq=20 radio=11DE drop=0] onConnect.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:00.286097+00:00 [BLETRACE t=50818 seq=21 radio=11DE drop=0] resetControl.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:00.286485+00:00 [BLETRACE t=50818 seq=22 radio=11DE drop=0] resetControl.exit detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:00.286722+00:00 [BLETRACE t=50818 seq=23 radio=11DE drop=0] bt_connect.boundary detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:00.287031+00:00 [BLETRACE t=50818 seq=24 radio=11DE drop=0] onConnect.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-21T12:58:00.287411+00:00 [BLETRACE t=50818 seq=25 radio=11DE drop=0] gatts.connect.conn_id detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-21T12:58:00.287861+00:00 [BLETRACE t=50820 seq=26 radio=11DE drop=0] stolo_poll_session.boundaries detail=0x2 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:00.553441+00:00 [BLETRACE t=51085 seq=27 radio=11DE drop=0] gap.event detail=0x37 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:01.171511+00:00 [BLETRACE t=51703 seq=28 radio=11DE drop=0] onPassKeyNotify detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:01.171680+00:00 [BLETRACE t=51703 seq=29 radio=11DE drop=0] gap.event detail=0xb state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:01.335524+00:00 [BLETRACE t=51867 seq=30 radio=11DE drop=0] gatts.write.handle detail=0x2e state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:01.395090+00:00 E (52424) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:23.439795+00:00 [BLETRACE t=73949 seq=31 radio=11DE drop=0] onAuthenticationComplete.success detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:23.439902+00:00 [BLETRACE t=73949 seq=32 radio=11DE drop=0] onAuthenticationComplete.fail_reason detail=0x51 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:23.442547+00:00 [BLETRACE t=73949 seq=33 radio=11DE drop=0] onAuthenticationComplete.auth_mode detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:23.442626+00:00 [BLETRACE t=73949 seq=34 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=1 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:23.442645+00:00 [BLETRACE t=73949 seq=35 radio=11DE drop=0] security.config.auth_req detail=0xd state=1 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:23.442660+00:00 [BLETRACE t=73949 seq=36 radio=11DE drop=0] security.config.iocap detail=0x0 state=1 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T12:58:23.442674+00:00 [BLETRACE t=73949 seq=37 radio=11DE drop=0] onAuthenticationComplete.exit detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:58:23.442688+00:00 [BLETRACE t=73949 seq=38 radio=11DE drop=0] gap.event detail=0x8 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:58:23.474938+00:00 E (74503) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:23.615150+00:00 [BLETRACE t=74115 seq=39 radio=11DE drop=0] display.path detail=0x111 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:58:25.455258+00:00 E (76483) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:26.655118+00:00 E (77683) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:26.657155+00:00 E (77683) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:29.895190+00:00 E (80923) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:29.897006+00:00 E (80923) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:33.105181+00:00 E (84133) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:33.107227+00:00 E (84133) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:36.345164+00:00 E (87373) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:36.347164+00:00 E (87373) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:39.585315+00:00 E (90612) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:39.587247+00:00 E (90613) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:42.825567+00:00 E (93852) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:42.827282+00:00 E (93853) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:46.065539+00:00 E (97092) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:46.067526+00:00 E (97093) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:49.305376+00:00 E (100332) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:49.307528+00:00 E (100333) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:52.546120+00:00 E (103572) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:52.547521+00:00 E (103573) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:55.785322+00:00 E (106812) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:55.787643+00:00 E (106812) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:58:59.025325+00:00 E (110052) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:58:59.027592+00:00 E (110052) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:02.265236+00:00 E (113292) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:02.267539+00:00 E (113292) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:05.505419+00:00 E (116532) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:05.507796+00:00 E (116532) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:08.745722+00:00 E (119772) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:08.747633+00:00 E (119772) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:11.978852+00:00 E (123012) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:11.981242+00:00 E (123012) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:15.212011+00:00 E (126251) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:15.214208+00:00 E (126252) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:18.446583+00:00 E (129491) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:18.448990+00:00 E (129492) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:21.712079+00:00 E (132761) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:21.714446+00:00 E (132762) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:24.948504+00:00 E (136001) BT_BTM: BTM_GetSecurityFlags false
+2026-09-21T12:59:24.950810+00:00 E (136002) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T12:59:25.008596+00:00 E (136061) BT_BTM: Device not found
+2026-09-21T12:59:25.283551+00:00 [BLETRACE t=135565 seq=40 radio=11DE drop=0] onDisconnect.enter detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:59:25.283975+00:00 [BLETRACE t=135565 seq=41 radio=11DE drop=0] resetControl.enter detail=0x1 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:59:25.284134+00:00 [BLETRACE t=135565 seq=42 radio=11DE drop=0] resetControl.exit detail=0x2 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:59:25.284372+00:00 [BLETRACE t=135565 seq=43 radio=11DE drop=0] bt_disconnect.boundary detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-21T12:59:25.284620+00:00 [BLETRACE t=135565 seq=44 radio=11DE drop=0] onDisconnect.exit detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:59:25.284781+00:00 [BLETRACE t=135565 seq=45 radio=11DE drop=0] gatts.disconnect.reason detail=0x13 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:59:25.285030+00:00 [BLETRACE t=135569 seq=46 radio=11DE drop=0] gap.event detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:59:25.285192+00:00 [BLETRACE t=135569 seq=47 radio=11DE drop=0] gap.event detail=0x1 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:59:25.285350+00:00 [BLETRACE t=135569 seq=48 radio=11DE drop=0] gap.event detail=0x6 state=1 allow=0 auth=0 pin_present=0 boundary=1 bonds=0
+2026-09-21T12:59:25.285620+00:00 [BLETRACE t=135572 seq=49 radio=11DE drop=0] stolo_poll_session.boundaries detail=0x2 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
