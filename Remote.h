@@ -1,4 +1,5 @@
 // Copyright (C) 2024, Mark Qvist
+// Modified by Stolo Systems Inc., 2026-09-19 — default Stolo AP SSID.
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -69,8 +70,14 @@ void wifi_remote_start_ap() {
     if (wr_psk[0] != 0x00) { WiFi.softAP(wr_ssid, wr_psk, wr_channel); }
     else                   { WiFi.softAP(wr_ssid, NULL, wr_channel); }
   } else {
-    if (wr_psk[0] != 0x00) { WiFi.softAP(bt_devname, wr_psk, wr_channel); }
-    else                   { WiFi.softAP(bt_devname, NULL, wr_channel); }
+    #if defined(STOLO_BUILD)
+      char default_ssid[20];
+      snprintf(default_ssid, sizeof(default_ssid), "Stolo Node %.4s", bt_devname + 6);
+    #else
+      const char* default_ssid = bt_devname;
+    #endif
+    if (wr_psk[0] != 0x00) { WiFi.softAP(default_ssid, wr_psk, wr_channel); }
+    else                   { WiFi.softAP(default_ssid, NULL, wr_channel); }
   }
   delay(150);
   WiFi.softAPConfig(ap_ip, ap_ip, ap_nm);

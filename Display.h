@@ -1,4 +1,6 @@
 // Copyright (C) 2024, Mark Qvist
+// Modified by Stolo Systems Inc., 2026-09-19 — Stolo branding and F8 banners.
+// Modified by Stolo Systems Inc., 2026-09-21 — retain simultaneous fault visibility.
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -14,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "Graphics.h"
+#include "StoloDisplay.h"
 #include <Adafruit_GFX.h>
 
 #if BOARD_MODEL != BOARD_TECHO
@@ -817,7 +820,33 @@ extern char bt_dh[16];
 #if HAS_WIFI
   extern IPAddress wr_device_ip;
 #endif
+#if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+void draw_stolo_banner(StoloBanner banner) {
+  const unsigned char* bitmap = bm_stolo_store_error;
+  if (banner.kind == STOLO_BANNER_RESCUE) bitmap = bm_stolo_rescue;
+  else if (banner.kind == STOLO_BANNER_ENROLL) bitmap = bm_stolo_enroll;
+  else if (banner.kind == STOLO_BANNER_NEW_IDENTITY) bitmap = bm_stolo_identity;
+  disp_area.drawBitmap(0, 37, bitmap, 64, 27, SSD1306_WHITE, SSD1306_BLACK);
+  if (banner.kind == STOLO_BANNER_ENROLL || banner.kind == STOLO_BANNER_RESCUE) {
+    disp_area.drawBitmap(24, 53, bm_stolo_digits + (banner.seconds / 10)*5, 8, 5, SSD1306_WHITE, SSD1306_BLACK);
+    disp_area.drawBitmap(32, 53, bm_stolo_digits + (banner.seconds % 10)*5, 8, 5, SSD1306_WHITE, SSD1306_BLACK);
+  }
+}
+#endif
+
+void draw_disp_fault(uint8_t y) {
+  const unsigned char* bitmap = !device_firmware_ok() ? bm_fw_corrupt
+      : !modem_installed ? bm_no_radio : bm_conf_missing;
+  disp_area.drawBitmap(0, y, bitmap, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
+}
+
 void draw_disp_area() {
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    const StoloBanner banner = stolo_current_banner(millis(), bt_state == BT_STATE_PAIRING && bt_ssp_pin != 0);
+    const bool stolo_banner_active = banner.kind != STOLO_BANNER_RADIO;
+  #else
+    const bool stolo_banner_active = false;
+  #endif
   if (!device_init_done || firmware_update_mode) {
     uint8_t p_by = 37;
     if (disp_mode == DISP_MODE_LANDSCAPE || firmware_update_mode) {
@@ -827,9 +856,9 @@ void draw_disp_area() {
     if (!device_init_done) disp_area.drawBitmap(0, p_by, bm_boot, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
     if (firmware_update_mode) disp_area.drawBitmap(0, p_by, bm_fw_update, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
   } else {
-    if (!disp_ext_fb or bt_ssp_pin != 0) {
+    if (!disp_ext_fb || bt_ssp_pin != 0 || stolo_banner_active) {
       if (radio_online && display_diagnostics) {
-        disp_area.fillRect(0,8,disp_area.width(),37, SSD1306_BLACK); disp_area.fillRect(0,37,disp_area.width(),27, SSD1306_WHITE);
+        disp_area.fillRect(0,0,disp_area.width(),37, SSD1306_BLACK); disp_area.fillRect(0,37,disp_area.width(),27, SSD1306_WHITE);
         disp_area.setFont(SMALL_FONT); disp_area.setTextWrap(false); disp_area.setTextColor(SSD1306_WHITE); disp_area.setTextSize(1);
 
         disp_area.setCursor(2, 13);
@@ -922,17 +951,16 @@ void draw_disp_area() {
         }
       }
 
-      if (!hw_ready || radio_error || !device_firmware_ok()) {
-        if (!device_firmware_ok()) {
-          disp_area.drawBitmap(0, 37, bm_fw_corrupt, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
-        } else {
-          if (!modem_installed) {
-            disp_area.drawBitmap(0, 37, bm_no_radio, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
-          } else {
-            disp_area.drawBitmap(0, 37, bm_conf_missing, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
-          }
-        }
-      } else if (bt_state == BT_STATE_PAIRING and bt_ssp_pin != 0) {
+      const int8_t fault_y = stolo_fault_y(
+          !hw_ready || radio_error || !device_firmware_ok(), stolo_banner_active);
+      if (fault_y == 0) {
+        // Both problems stay visible: fault above, PIN/F8 notice below.
+        disp_area.fillRect(0, 0, disp_area.width(), 37, SSD1306_BLACK);
+        draw_disp_fault(0);
+      }
+      if (fault_y == 37) {
+        draw_disp_fault(37);
+      } else if (bt_state == BT_STATE_PAIRING && bt_ssp_pin != 0) {
         char *pin_str = (char*)malloc(DISP_PIN_SIZE+1);
         sprintf(pin_str, "%06d", bt_ssp_pin);
 
@@ -943,6 +971,11 @@ void draw_disp_area() {
           disp_area.drawBitmap(7+9*i, 37+16, bm_n_uh+offset, 8, 5, SSD1306_WHITE, SSD1306_BLACK);
         }
         free(pin_str);
+
+      #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+      } else if (stolo_banner_active) {
+        draw_stolo_banner(banner);
+      #endif
       } else {
         if (millis()-last_page_flip >= page_interval) {
           disp_page = (++disp_page%pages);
@@ -1034,6 +1067,10 @@ bool epd_blanked = false;
 #endif
 
 void update_display(bool blank = false) {
+  #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
+    if (stolo_current_banner(millis(), bt_state == BT_STATE_PAIRING && bt_ssp_pin != 0).kind != STOLO_BANNER_RADIO)
+      last_unblank_event = millis();
+  #endif
   display_updating = true;
   if (blank == true) {
     last_disp_update = millis()-disp_update_interval-1;

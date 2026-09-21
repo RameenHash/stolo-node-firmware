@@ -1,4 +1,5 @@
 // Copyright (C) 2024, Mark Qvist
+// Modified by Stolo Systems Inc., 2026-09-19 — display recovery announcements.
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -812,7 +813,18 @@ void transmit(uint16_t size) {
 }
 
 #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
-void stolo_rescue_announce(uint8_t flashes) { led_indicate_info(flashes); }
+void stolo_rescue_announce(uint8_t flashes) {
+  #if HAS_DISPLAY
+    display_unblank();
+    // At boot the display is not initialized yet; the state is already live
+    // for its first draw. Before RESCUE, render before the blocking LED loop.
+    if (disp_ready) {
+      last_disp_update = millis() - disp_update_interval - 1;
+      update_display();
+    }
+  #endif
+  led_indicate_info(flashes);
+}
 
 uint32_t stolo_ble_link_generation() {
   #if HAS_BLE

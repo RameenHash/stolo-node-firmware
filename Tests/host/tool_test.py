@@ -14,6 +14,17 @@ tool = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tool)
 
 class ToolTests(unittest.TestCase):
+    def test_hello_display_capabilities(self):
+        node = object.__new__(tool.Node)
+        for caps in [0, 3]:
+            body = bytes([1])+b'x'+bytes([1, 86])+bytes(32)+bytes([8, caps])+bytes(4)+bytes(16)+bytes([0])
+            node.request = lambda *_: body
+            reply = node.hello()
+            self.assertEqual(reply['capabilities'], caps)
+            self.assertEqual(reply['display_present'], bool(caps & 1))
+            self.assertEqual(reply['enroll_window_display'], bool(caps & 2))
+            self.assertNotIn('attestation', reply)
+
     def test_close_leave_flush_release(self):
         calls = []
         class Serial:

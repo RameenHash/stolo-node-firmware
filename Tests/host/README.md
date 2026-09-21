@@ -11,6 +11,7 @@ The extracted files are generated under ignored `build/host/`.
 
 | Suite | Coverage |
 |---|---|
+| `display_test.cpp` | F8: complete banner priority matrix, simultaneous fault placement, two-digit countdown saturation before byte conversion, countdown and notice expiry across millis wrap, real ENROLL/RESCUE success and failure transitions, HELLO byte in display/headless builds; generated artwork freshness via `Tools/oled_bitmaps.py --check` |
 | `control_test.cpp` | Real CTRL parser + SCP dispatcher + NUS dispatcher: routing, escaping, interleaving, authorization, lifecycle, overflow/malformed recovery, shared-session LEAVE and EVENT action ordering |
 | `ble_control_test.cpp` | Extracted production BLESerial GATT setup, FIFO, RX callbacks and EVENT sender: permissions, advertisement, MTU chunks, queue overflow, generation and subscription boundaries (fake stack) |
 | `dispatcher_test.cpp` | C1: every pair of source transitions, queued bytes, SCP/escape state, mid-frame disconnect, mutation role check, authorized positive case |

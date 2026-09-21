@@ -133,7 +133,7 @@ class Node:
         n = b[0]; fw = b[1:1 + n].decode(); i = 1 + n
         maj, mn = b[i], b[i + 1]; i += 2
         node_pub = b[i:i + 32]; i += 32
-        flags = b[i]; attest = b[i + 1]; i += 2
+        flags = b[i]; capabilities = b[i + 1]; i += 2
         epoch = struct.unpack(">I", b[i:i + 4])[0]; i += 4
         nonce = b[i:i + 16]; i += 16
         source = b[i] if i < len(b) else None
@@ -143,7 +143,8 @@ class Node:
                     owner_enrolled=bool(flags & 1), authorized=bool(flags & 2),
                     enroll_window_open=bool(flags & 4), store_ok=bool(flags & 8),
                     compat_mode=bool(flags & 16),
-                    attestation=attest, owner_epoch=epoch, nonce=nonce.hex(),
+                    capabilities=capabilities, display_present=bool(capabilities & 1),
+                    enroll_window_display=bool(capabilities & 2), owner_epoch=epoch, nonce=nonce.hex(),
                     source={0: "usb", 1: "ble", 2: "wifi"}.get(source, source))
 
     def auth(self, key):

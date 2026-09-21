@@ -57,7 +57,8 @@ owner/epoch; the flag occupies a formerly reserved schema-1 byte.
 
 **Physical recovery** (replacing the owner of an owned node) is the
 boot-time enrollment window: hold the button while power is applied
-(≥ 3 s) for a 60 s window. Three info-LED flashes announce the open window; F8 OLED work remains pending. A
+(≥ 3 s) for a 60 s window. Three info-LED flashes announce the open window. Display builds show
+`ENROLL WINDOW` with remaining seconds, cleared on expiry or successful ENROLL. A
 successful ENROLL from any path wipes the previous owner's BLE bonds. USB
 attachment alone authorizes nothing on an owned node.
 
@@ -70,6 +71,15 @@ alone does not repair storage and ENROLL still refuses that state. Explicit
 both active, it deliberately replaces the unreadable identity with a new,
 unowned identity, consumes the window and wipes BLE bonds after reply/drain.
 Six info-LED flashes announce the destructive operation before its writes.
+The lower OLED band shows `RESCUE` with a countdown while RECOVERY and the
+window are active, `NEW IDENTITY` for 5 seconds after successful RESCUE, and
+`STORE ERROR / HOLD BTN / AT BOOT` persistently when RECOVERY has no window.
+A pairing PIN takes priority over every Stolo notice. A simultaneous
+firmware/radio/config fault is shown in the upper area so the lower PIN or
+notice cannot hide it. Without a Stolo notice, faults retain their original
+lower-band priority, including over pairing in plain builds; otherwise the
+existing radio/airtime panel is used. Countdown rendering saturates at 99
+seconds if a future window exceeds the two-digit display range. Notice state is read-only to the renderer.
 The new node stays SCP-enrollment-only (unknown history means ever-enrolled).
 Existing app identity bindings must be discarded and the new public key
 reviewed before enrollment. No automatic identity replacement is attempted on
@@ -161,8 +171,8 @@ as not applied. An error is type `0x7F`: `[code][message…]`.
 
 ## Session and authorization
 
-- **HELLO (0x01)** → `[fw_len][fw…][rnode_maj][rnode_min][node_pub 32][flags][attest][owner_epoch u32][nonce 16][source]`.
-  Flags: bit0 owner enrolled, bit1 this session is the owner, bit2 enroll window open, bit3 config store OK, bit4 factory compat (build enabled + never enrolled + unowned + present host). `attest` is 0 (advisory) until F8. `source` is 0 USB / 1 BLE / 2 WiFi. HELLO starts a session on this connection: a fresh single-use nonce and no authority.
+- **HELLO (0x01)** → `[fw_len][fw…][rnode_maj][rnode_min][node_pub 32][flags][capabilities][owner_epoch u32][nonce 16][source]`.
+  Flags: bit0 owner enrolled, bit1 this session is the owner, bit2 enroll window open, bit3 config store OK, bit4 factory compat (build enabled + never enrolled + unowned + present host). `capabilities` replaces the former attestation byte at the same wire offset: bit0 = display present in this build, bit1 = enrollment window display implemented; remaining bits are reserved/zero. Display builds report `0x03`, headless builds `0x00`. These bits are advisory build capabilities, not proof of a working screen, physical presence, or cryptographic attestation. The host tool reports `capabilities`, `display_present`, and `enroll_window_display`. `source` is 0 USB / 1 BLE / 2 WiFi. HELLO starts a session on this connection: a fresh single-use nonce and no authority.
 - **LEAVE (0x06)** empty body → `[ok = 1]`. Ends the shared authority/challenge without disconnecting BLE or interrupting an in-flight NUS frame when sent on CTRL. Requires HELLO, not owner authority. A nonempty body returns error 1. Legacy CMD_LEAVE stays supported on USB/NUS.
 - **AUTH (0x02)** body: Ed25519 signature (64) by the owner key over
   `"stolo-auth-v2" || node_pub[32] || nonce[16] || owner_epoch(u32be) || source(u8)`.
