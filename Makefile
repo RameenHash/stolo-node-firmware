@@ -301,6 +301,10 @@ PORT ?= /dev/cu.usbmodem2101
 firmware-stolo-tbeam_supreme:
 	arduino-cli compile --log --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc" -e --build-property "build.partitions=no_ota" --build-property "upload.maximum_size=2097152" --build-property "compiler.cpp.extra_flags=-DBOARD_MODEL=0x3D -DSTOLO_BUILD=1"
 
+# Bench diagnostics only: plaintext USB output is not a KISS/SCP stream.
+firmware-stolo-tbeam_supreme-ble-trace:
+	arduino-cli compile --log --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc" -e --build-property "build.partitions=no_ota" --build-property "upload.maximum_size=2097152" --build-property "compiler.cpp.extra_flags=-DBOARD_MODEL=0x3D -DSTOLO_BUILD=1 -DSTOLO_BLE_TRACE=1"
+
 flash-stolo-tbeam_supreme:
 	arduino-cli upload -p $(PORT) --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc" --config-file arduino-cli.yaml
 	@sleep 2
@@ -561,7 +565,7 @@ test-host:
 	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=1 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_hw_test Tests/host/transport_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DARDUINO_USB_MODE=0 -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/transport_tiny_test Tests/host/transport_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/control_test Tests/host/control_test.cpp
-	g++ -std=c++17 -Wall -Ibuild/host -o build/host/ble_control_test Tests/host/ble_control_test.cpp
+	g++ -std=c++17 -Wall -I. -Ibuild/host -o build/host/ble_control_test Tests/host/ble_control_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DHAS_DISPLAY=1 -I. -ITests/host -ITests/host/stubs -o build/host/display_test Tests/host/display_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DHAS_DISPLAY=0 -I. -ITests/host -ITests/host/stubs -o build/host/display_headless_test Tests/host/display_test.cpp
 	./build/host/display_test
