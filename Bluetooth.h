@@ -181,7 +181,7 @@ char bt_devname[11];
     bool ble_authenticated = false;
     uint32_t pairing_pin = 0;
 
-    // Modified by Stolo Systems Inc., 2026-09-21 — instrument before fixing.
+    // Modified by Stolo Systems Inc., 2026-09-21 — SMP tracing and open-window pairing retries.
     #if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
       extern volatile bool stolo_ble_boundary_pending;
       struct StoloBleTraceRecord {
@@ -289,6 +289,12 @@ char bt_devname[11];
 
     #if defined(STOLO_BUILD)
       bool stolo_bt_has_bonds() { return esp_ble_get_bond_device_num() > 0; }
+      bool stolo_bt_pairing_window_open() {
+        // A failed/cancelled attempt cannot extend a bonded owner's deadline
+        // or reopen a window explicitly closed by the user.
+        return bt_allow_pairing && bt_state != BT_STATE_OFF &&
+            (!stolo_bt_has_bonds() || (uint32_t)(millis() - bt_pairing_started) < BT_PAIRING_TIMEOUT);
+      }
     #endif
 
     void bt_enable_pairing() {
@@ -385,9 +391,21 @@ char bt_devname[11];
       } else {
         // Serial.println("Authentication fail");
         ble_authenticated = false;
+        #if defined(STOLO_BUILD)
+          const bool retry_pairing = stolo_bt_pairing_window_open();
+        #endif
         bt_state = BT_STATE_ON;
         bt_update_passkey();
         bt_security_setup();
+        #if defined(STOLO_BUILD)
+          if (retry_pairing) {
+            // Keep the newly generated code visible for another attempt.
+            // Do not renew the existing presence window's start time.
+            bt_state = BT_STATE_PAIRING;
+            STOLO_BT_TRACE("onAuthenticationComplete.retry", 1);
+            return;
+          }
+        #endif
       }
       bt_allow_pairing = false;
       bt_ssp_pin = 0;
@@ -412,7 +430,11 @@ char bt_devname[11];
       // Serial.printf("Disconnected: %d\n", conn_id);
       display_unblank();
       ble_authenticated = false;
-      bt_state = BT_STATE_ON;
+      #if defined(STOLO_BUILD)
+        bt_state = stolo_bt_pairing_window_open() ? BT_STATE_PAIRING : BT_STATE_ON;
+      #else
+        bt_state = BT_STATE_ON;
+      #endif
       #if defined(STOLO_BUILD)
         STOLO_BT_TRACE("bt_disconnect.boundary", 0);
         stolo_ble_connection_boundary(); // revoke now; loop owns parser teardown

@@ -567,12 +567,16 @@ test-host:
 	g++ -std=c++17 -Wall -Wno-unused-function -I. -ITests/host -ITests/host/stubs -Ibuild/host -o build/host/control_test Tests/host/control_test.cpp
 	g++ -std=c++17 -Wall -I. -Ibuild/host -o build/host/ble_control_test Tests/host/ble_control_test.cpp
 	g++ -std=c++17 -Wall -Ibuild/host -o build/host/ble_trace_test Tests/host/ble_trace_test.cpp
+	g++ -std=c++17 -Wall -Wno-unused-variable -I. -Ibuild/host -o build/host/ble_pairing_test Tests/host/ble_pairing_test.cpp
+	g++ -std=c++17 -Wall -I. -Ibuild/host -o build/host/pairing_display_test Tests/host/pairing_display_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DHAS_DISPLAY=1 -I. -ITests/host -ITests/host/stubs -o build/host/display_test Tests/host/display_test.cpp
 	g++ -std=c++17 -Wall -Wno-unused-function -DHAS_DISPLAY=0 -I. -ITests/host -ITests/host/stubs -o build/host/display_headless_test Tests/host/display_test.cpp
 	./build/host/display_test
 	./build/host/display_headless_test
 	./build/host/ble_control_test
 	./build/host/ble_trace_test
+	./build/host/ble_pairing_test
+	./build/host/pairing_display_test
 	./build/host/control_test
 	./build/host/transport_hw_test
 	./build/host/transport_tiny_test

@@ -99,7 +99,7 @@ not explain why the OLED's code was not visible.
 **Software verified:** the buffered trace's display-path flags `0x121` mean
 initialized, valid firmware hash, pairing, without update mode, an external
 framebuffer or radio diagnostics. They establish software render inputs,
-not physical OLED visibility. The failure callback then changes them to
+not physical OLED visibility. The pre-fix failure callback then changes them to
 `0x111` (Bluetooth on, no displayed pairing PIN).
 
 **Software verified:** the trace does not implicate an early EVENT CCCD
@@ -111,5 +111,39 @@ separate fork PR.
 
 **Device qualified: none.** Missing evidence: physical OLED photo and correct
 code entry, successful iPhone bond, ready/settings, reconnect/recovery,
-original F3 checks and app log. Behavior fixes remain pending this evidence;
-this PR is an instrumentation/investigation draft.
+original F3 checks and app log. The candidate fixes below remain a draft pending the iPhone gates.
+
+## Candidate fixes after the captured failure
+
+**Software verified:** reading the radio's actual `disp_area` with USB
+`CMD_DISP_READ` exposed the PIN's inverse digit artwork over F8's dark banner.
+`bm_n_uh` contains black numeral strokes with white padding, intended for the
+old white pairing panel. On the dark panel those strokes merge into the
+background, leaving fragments. The PIN renderer now uses the existing
+positive `bm_stolo_digits` glyphs that match the current banner. It renders
+from one PIN snapshot with a seven-byte stack buffer; the SMP code itself is
+unchanged and the stack notification remains authoritative.
+
+**Software verified:** after flashing, a second USB canvas read contains six
+complete positive digit glyphs. This is framebuffer evidence, not a photo
+of the physical OLED and not iPhone qualification. Raw canvases contain a
+live passkey and remain under local `.context/`, outside the PR.
+
+**Software verified:** the failed-auth callback now retains pairing and its
+new code when the existing window is still open. Peer cancellation likewise
+retains that window. A no-bond radio keeps the already-open window indefinitely;
+a bonded radio retains only the existing deadline, including across millis
+wrap. Neither path reopens an explicitly closed window, extends its deadline,
+authenticates the failed link, or requests a disconnect. Successful
+pairing still clears the code/window and keeps the authenticated connection.
+
+**Software verified:** `make test-host` passes with the actual extracted
+ESP32 callbacks (15 checks), the production PIN renderer and artwork
+(11 checks), and a real deferred-boundary preservation regression. Against
+the pre-fix callbacks, four retry checks fail; against the old digit artwork,
+all 11 pixel checks fail. Those regressions pass with the candidate.
+
+**Software verified:** the candidate trace image builds at 1,466,153 bytes;
+normal Stolo at 1,463,513 bytes. It was flashed with its firmware hash updated.
+**Device qualified: none** until the physical code is entered successfully
+and the iPhone qualification checklist is completed.

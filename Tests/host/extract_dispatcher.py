@@ -50,3 +50,24 @@ source = Path('Bluetooth.h').read_text()
 start = source.index('      struct StoloBleTraceRecord {')
 end = source.index('\n    #endif', start)
 Path('build/host/ble_trace.h').write_text(source[start:end] + '\n')
+
+# Real ESP32 BLE callbacks; do not substitute Classic BT/NRF variants.
+source = source[source.index('    bool bt_setup_hw(); void bt_security_setup();'):]
+parts = []
+for name in ('stolo_bt_pairing_window_open', 'bt_passkey_notify_callback',
+             'bt_security_request_callback', 'bt_authentication_complete_callback',
+             'bt_connect_callback', 'bt_disconnect_callback'):
+    match = re.search(r'^    (?:void|bool) ' + name + r'\([^\n]*\) \{\n.*?^    \}', source, re.M | re.S)
+    if not match:
+        # The window helper lives one preprocessor block deeper.
+        match = re.search(r'^      bool ' + name + r'\([^\n]*\) \{\n.*?^      \}', source, re.M | re.S)
+    if not match:
+        raise SystemExit(f'missing production BLE callback: {name}')
+    parts.append(match.group())
+Path('build/host/ble_pairing.h').write_text('\n\n'.join(parts) + '\n')
+
+source = Path('Display.h').read_text()
+match = re.search(r'^void draw_pairing_pin\([^\n]*\) \{\n.*?^\}', source, re.M | re.S)
+if not match:
+    raise SystemExit('missing production PIN renderer')
+Path('build/host/pairing_display.h').write_text(match.group() + '\n')

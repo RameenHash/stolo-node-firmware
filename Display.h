@@ -1,4 +1,4 @@
-// Modified by Stolo Systems Inc., 2026-09-21 — optional buffered BLE bench trace.
+// Modified by Stolo Systems Inc., 2026-09-21 — legible PIN glyphs and optional buffered BLE bench trace.
 // Copyright (C) 2024, Mark Qvist
 // Modified by Stolo Systems Inc., 2026-09-19 — Stolo branding and F8 banners.
 // Modified by Stolo Systems Inc., 2026-09-21 — retain simultaneous fault visibility.
@@ -841,6 +841,18 @@ void draw_disp_fault(uint8_t y) {
   disp_area.drawBitmap(0, y, bitmap, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
 }
 
+void draw_pairing_pin(uint32_t pin) {
+  char pin_str[DISP_PIN_SIZE+1];
+  snprintf(pin_str, sizeof(pin_str), "%06lu", (unsigned long)pin);
+  disp_area.drawBitmap(0, 37, bm_pairing, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
+  for (int i = 0; i < DISP_PIN_SIZE; i++) {
+    uint8_t offset = (pin_str[i]-'0')*5;
+    // F8's pairing banner is dark; the upstream digits are inverse glyphs
+    // intended to merge into its old solid-white banner.
+    disp_area.drawBitmap(7+9*i, 37+16, bm_stolo_digits+offset, 8, 5, SSD1306_WHITE, SSD1306_BLACK);
+  }
+}
+
 void draw_disp_area() {
   #if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
     // Render-path evidence, never a claim that the physical OLED was readable.
@@ -974,16 +986,7 @@ void draw_disp_area() {
       if (fault_y == 37) {
         draw_disp_fault(37);
       } else if (bt_state == BT_STATE_PAIRING && bt_ssp_pin != 0) {
-        char *pin_str = (char*)malloc(DISP_PIN_SIZE+1);
-        sprintf(pin_str, "%06d", bt_ssp_pin);
-
-        disp_area.drawBitmap(0, 37, bm_pairing, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
-        for (int i = 0; i < DISP_PIN_SIZE; i++) {
-          uint8_t numeric = pin_str[i]-48;
-          uint8_t offset = numeric*5;
-          disp_area.drawBitmap(7+9*i, 37+16, bm_n_uh+offset, 8, 5, SSD1306_WHITE, SSD1306_BLACK);
-        }
-        free(pin_str);
+        draw_pairing_pin(bt_ssp_pin);
 
       #if defined(STOLO_BUILD) && MCU_VARIANT == MCU_ESP32
       } else if (stolo_banner_active) {

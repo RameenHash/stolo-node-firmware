@@ -102,6 +102,11 @@ static void test_boundaries_and_ordering() {
   ctrl(SCP_HELLO); CHECK(stolo_role()==STOLO_ROLE_GUEST,"HELLO after idle is guest");
   owner(); feed({FEND,CMD_STOLO,SCP_VERSION,SCP_SET_BT,1,FESC});
   stolo_host_disconnected(); CHECK(!stolo_ctrl_parser.in_frame && !stolo_is_owner(),"disconnect clears CTRL partial frame and authority");
+  bt_state=2; bt_allow_pairing=true; ble_authenticated=false;
+  stolo_session.source=STOLO_SRC_BLE; stolo_ble_connection_boundary();
+  CHECK(stolo_poll_session() && bt_state==2 && bt_allow_pairing && !ble_authenticated,
+        "real BLE boundary teardown preserves in-flight pairing state and permission");
+  bt_state=BT_STATE_CONNECTED; bt_allow_pairing=false; ble_authenticated=true;
   ctrl(SCP_HELLO); CHECK(stolo_role()==STOLO_ROLE_GUEST,"HELLO after disconnect is guest");
   owner(); stolo_ble_connection_boundary(); ++fake_ble_link;
   CHECK(!stolo_is_owner(),"callback boundary immediately revokes owner");
