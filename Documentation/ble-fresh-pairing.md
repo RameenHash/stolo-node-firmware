@@ -44,19 +44,21 @@ capture of every ATT request rejected inside the stack.
 
 ## Qualification record
 
-**Device qualified: none.** The following gates require the physical iPhone,
-OLED observations/photos and app logs. A host-test pass or firmware build
-cannot satisfy them.
+**Device qualified:** fresh passkey pairing, a connected iPhone link, app ready and
+Node settings loaded on 11DE were confirmed by Rameen on 2026-09-21 with candidate `b1d6a56`. The
+[success trace](traces/2026-09-21-11de-success.txt) records one bond and
+authenticated connected state. Other gates remain unchecked; no photos or app
+log have been supplied. The larger-digit follow-up still needs visual review.
 
 - [ ] Radio reports no bonds; iPhone Settings has no RNode bond.
-- [ ] Fresh app connection displays the passkey on the OLED, iOS accepts that
+- [x] Fresh app connection displays the passkey on the OLED, iOS accepts that
       passkey, creates a bond and the link stays connected.
-- [ ] App reaches ready and Node settings can be read.
+- [x] App reaches ready and Node settings can be read (Rameen confirmed).
 - [ ] Reconnect uses the existing bond silently.
 - [ ] Forget in iOS plus node debond allows a second clean fresh pairing.
 - [ ] Original F3 check 1: no-bond cold boot needs no button press and remains
       pairable beyond the configured window.
-- [ ] Original F3 check 2: app pairing keeps the link up without a required
+- [x] Original F3 check 2: app pairing keeps the link up without a required
       post-pair disconnect/reconnect.
 - [ ] Original F3 check 3: bonded cold boot does not open pairing, bonded
       reconnect works, and a 5 s button hold opens the configured pairing
@@ -109,9 +111,9 @@ MITM authentication. Do not relax EVENT/CTRL permissions on this evidence.
 The iOS bridge remains outside this PR; further bridge evidence requires a
 separate fork PR.
 
-**Device qualified: none.** Missing evidence: physical OLED photo and correct
-code entry, successful iPhone bond, ready/settings, reconnect/recovery,
-original F3 checks and app log. The candidate fixes below remain a draft pending the iPhone gates.
+**Device qualified:** the later successful 11DE pairing supersedes these
+pre-fix failures; see the success record below. Reconnect, forget/debond recovery, remaining F3 checks, photos and app log
+are pending; Rameen subsequently confirmed ready and Node settings loaded.
 
 ## Candidate fixes after the captured failure
 
@@ -145,5 +147,29 @@ all 11 pixel checks fail. Those regressions pass with the candidate.
 
 **Software verified:** the candidate trace image builds at 1,466,153 bytes;
 normal Stolo at 1,463,513 bytes. It was flashed with its firmware hash updated.
-**Device qualified: none** until the physical code is entered successfully
-and the iPhone qualification checklist is completed.
+**Device qualified:** the physical code was subsequently entered and pairing
+succeeded; the remaining checklist is still pending.
+
+## Successful fresh pairing and larger digits
+
+**Device qualified:** Rameen reported “connected and paired” on 2026-09-21,
+then requested a larger OLED code. The captured fresh attempt starts with
+zero bonds; `onAuthenticationComplete` reports success, mode `0x0d`, one bond,
+and `state=3 auth=1` with no post-authentication disconnect. EVENT subscription
+(handle `0x3c`) follows authentication. Rameen also confirmed that the app reached ready and Node settings loaded.
+This qualifies fresh pairing, the retained link and Node settings access;
+silent reconnect, recovery and throughput remain pending.
+
+**Software verified:** the follow-up enlarges each positive 3×5 glyph to
+6×10 pixels. Six digits span 56 pixels with four-pixel margins and clear
+four-pixel gaps; they remain below the PAIRING label within the 64×64 panel.
+The production-renderer tests check all ten digits at doubled size, gaps,
+margins, clipping and leading zeros. Physical review of the enlarged code
+is pending; SMP, bond storage and retry behavior are unchanged by this follow-up.
+
+**Software verified:** enlarged-digit `make test-host` passes; T-Beam Supreme
+trace, normal Stolo and plain builds pass at 1,466,197, 1,463,549 and
+1,442,429 bytes respectively. The ROM-loader upload completed with flash hash
+verification after the RAM-stub uploader failed before writing. USB records
+from the new image show `state=3 auth=1 bonds=1` after reboot. The phone-side
+silent reconnect observation and the firmware-hash target update are pending.

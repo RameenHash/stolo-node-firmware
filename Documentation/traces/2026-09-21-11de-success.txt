@@ -1,0 +1,28 @@
+# device qualified: fresh iPhone pairing, connected link, app ready and Node settings, confirmed by Rameen
+# Firmware b1d6a56 (before larger-digit follow-up); software trace records below.
+2026-09-21T13:09:06.495123+00:00 USB capture opened: /dev/cu.usbmodem1101
+2026-09-21T13:13:48.124469+00:00 [BLETRACE t=302896 seq=20 radio=11DE drop=0] onConnect.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:48.125072+00:00 [BLETRACE t=302896 seq=21 radio=11DE drop=0] resetControl.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:48.125116+00:00 [BLETRACE t=302896 seq=22 radio=11DE drop=0] resetControl.exit detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:48.125142+00:00 [BLETRACE t=302896 seq=23 radio=11DE drop=0] bt_connect.boundary detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:48.125166+00:00 [BLETRACE t=302896 seq=24 radio=11DE drop=0] onConnect.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-21T13:13:48.125193+00:00 [BLETRACE t=302896 seq=25 radio=11DE drop=0] gatts.connect.conn_id detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-21T13:13:48.125217+00:00 [BLETRACE t=302898 seq=26 radio=11DE drop=0] stolo_poll_session.boundaries detail=0x2 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:48.446888+00:00 [BLETRACE t=303193 seq=27 radio=11DE drop=0] gap.event detail=0x37 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:49.039367+00:00 [BLETRACE t=303811 seq=28 radio=11DE drop=0] onPassKeyNotify detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:49.039427+00:00 [BLETRACE t=303811 seq=29 radio=11DE drop=0] gap.event detail=0xb state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:49.202126+00:00 [BLETRACE t=303975 seq=30 radio=11DE drop=0] gatts.write.handle detail=0x2e state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:13:49.261527+00:00 E (304532) BT_GATT: gatts_write_attr_perm_check - GATT_INSUF_AUTHENTICATION: MITM required,handle:0x002a
+2026-09-21T13:14:04.592630+00:00 [BLETRACE t=319365 seq=31 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:14:04.592753+00:00 [BLETRACE t=319365 seq=32 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:14:04.592807+00:00 [BLETRACE t=319365 seq=33 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:14:04.654472+00:00 [BLETRACE t=319427 seq=34 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-21T13:14:04.762325+00:00 [BLETRACE t=319504 seq=35 radio=11DE drop=0] onAuthenticationComplete.success detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-21T13:14:04.762449+00:00 [BLETRACE t=319504 seq=36 radio=11DE drop=0] onAuthenticationComplete.fail_reason detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-21T13:14:04.762683+00:00 [BLETRACE t=319504 seq=37 radio=11DE drop=0] onAuthenticationComplete.auth_mode detail=0xd state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-21T13:14:04.762782+00:00 [BLETRACE t=319504 seq=38 radio=11DE drop=0] onAuthenticationComplete.exit detail=0x0 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-21T13:14:04.762957+00:00 [BLETRACE t=319504 seq=39 radio=11DE drop=0] gap.event detail=0x8 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-21T13:14:04.763089+00:00 [BLETRACE t=319504 seq=40 radio=11DE drop=0] display.path detail=0x131 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-21T13:14:04.763236+00:00 [BLETRACE t=319504 seq=41 radio=11DE drop=0] gatts.write.handle detail=0x2a state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-21T13:14:05.072608+00:00 [BLETRACE t=319845 seq=42 radio=11DE drop=0] gatts.write.handle detail=0x3c state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-21T13:14:07.803674+00:00 [BLETRACE t=322575 seq=43 radio=11DE drop=0] gatts.write.handle detail=0x2a state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1

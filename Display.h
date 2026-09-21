@@ -847,9 +847,16 @@ void draw_pairing_pin(uint32_t pin) {
   disp_area.drawBitmap(0, 37, bm_pairing, disp_area.width(), 27, SSD1306_WHITE, SSD1306_BLACK);
   for (int i = 0; i < DISP_PIN_SIZE; i++) {
     uint8_t offset = (pin_str[i]-'0')*5;
-    // F8's pairing banner is dark; the upstream digits are inverse glyphs
-    // intended to merge into its old solid-white banner.
-    disp_area.drawBitmap(7+9*i, 37+16, bm_stolo_digits+offset, 8, 5, SSD1306_WHITE, SSD1306_BLACK);
+    // Enlarge the centered 3x5 strokes to 6x10. Six digits span 56 pixels,
+    // leaving four-pixel margins in the 64-pixel panel and room for the label.
+    for (uint8_t y = 0; y < 5; ++y) {
+      uint8_t row = pgm_read_byte(bm_stolo_digits+offset+y);
+      for (uint8_t x = 0; x < 3; ++x) {
+        if (row & (0x20 >> x)) {
+          disp_area.fillRect(4+10*i+2*x, 50+2*y, 2, 2, SSD1306_WHITE);
+        }
+      }
+    }
   }
 }
 
