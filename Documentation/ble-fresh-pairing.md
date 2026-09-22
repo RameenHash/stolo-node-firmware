@@ -45,25 +45,28 @@ capture of every ATT request rejected inside the stack.
 ## Qualification record
 
 **Device qualified:** fresh passkey pairing, a connected iPhone link, app ready and
-Node settings loaded on 11DE were confirmed by Rameen on 2026-09-21 with candidate `b1d6a56`. The
+Node settings loaded on 11DE were confirmed by Rameen on 2026-09-21 with candidate `b1d6a56`,
+then repeated on the enlarged-digit image (`e4410b8`) on 2026-09-22.
+The later session also qualified silent bonded reconnect and the physical
+pairing-window/no-bond cold-boot checks. The
 [success trace](traces/2026-09-21-11de-success.txt) records one bond and
-authenticated connected state. Other gates remain unchecked; physical photos are still needed. A sanitized
+authenticated connected state. All functional checklist gates below passed; physical photos are still needed. A sanitized
 [app journal excerpt](traces/2026-09-21-11de-app-ready.txt) corroborates ready. Rameen confirmed the enlarged digits readable on 2026-09-22.
 
 - [x] Radio reports no bonds; iPhone Settings has no RNode bond (2026-09-22).
 - [x] Fresh app connection displays the passkey on the OLED, iOS accepts that
       passkey, creates a bond and the link stays connected.
 - [x] App reaches ready and Node settings can be read (Rameen confirmed).
-- [ ] Reconnect uses the existing bond silently.
+- [x] Reconnect uses the existing bond silently (cold boot, 2026-09-22).
 - [x] Forget in iOS plus node debond allows a second clean fresh pairing (2026-09-22).
 - [x] Original F3 check 1: no-bond cold boot needs no button press and remains
       pairable beyond the configured window.
 - [x] Original F3 check 2: app pairing keeps the link up without a required
       post-pair disconnect/reconnect.
-- [ ] Original F3 check 3: bonded cold boot does not open pairing, bonded
+- [x] Original F3 check 3: bonded cold boot does not open pairing, bonded
       reconnect works, and a 5 s button hold opens the configured pairing
       window (120 s default; record any bench override).
-- [ ] Original F3 check 4: record a BLE throughput baseline with the existing
+- [x] Original F3 check 4: record a BLE throughput baseline with the existing
       write-with-response path before any WRITE_NR change.
 
 **Software verified:** any iOS bridge change belongs in a separate fork PR;
@@ -239,3 +242,45 @@ USB authentication succeeds at `t=202416`, with `auth_mode=0x0d`, one bond,
 at 06:47:03.792 with a 512-byte maximum write payload.
 
 **Software verified:** [no-bond boot, restoration and fresh-pair recovery evidence](traces/2026-09-22-11de-fresh-recovery.txt).
+
+**Device qualified:** after the successful fresh-pair recovery, Rameen power
+cycled 11DE without holding a button, kept the iPhone bond, and confirmed
+ready/settings loaded without a code request. This completes silent reconnect
+and F3 check 3. **Software verified:** the iPhone journal records connected at
+06:50:27.925 and ready at 06:50:28.150 (512-byte write payload). USB output
+paused during connect, then drained queued records later: authentication
+succeeded at `t=1463` with one bond and no passkey notification in the
+continuous reconnect sequence. The later load interval dropped 1,014 trace
+records, so it is not a lossless throughput trace. Subsequent protected CTRL
+reads also succeeded. [Reconnect evidence](traces/2026-09-22-11de-silent-reconnect.txt).
+
+**Software verified — throughput preparation:** a read-only benchmark reached
+both iPhone loopback bridge ports via USB forwarding. After HELLO, the
+three-second simultaneous GET_RADIO smoke run returned 200/200 valid replies
+on each channel. A 60-second attempt completed 6,848/6,848 CTRL replies but
+the NUS socket closed after 328 replies and about five seconds. No corrupted
+SCP payload was observed before that close, but the simultaneous sustained
+run is not qualified. The bridge accepts one socket client per channel and
+replaces the previous one on a new accept; pausing the normal RNS connection
+for an isolated benchmark is the next check. This is not yet evidence of a
+firmware or iOS bridge defect.
+
+**Device qualified:** the isolated 60-second simultaneous NUS/CTRL baseline
+completed 3,936/3,936 valid GET_RADIO replies per channel, with no SCP integrity
+errors. The normal saved app connection was disabled for measurement while
+iPhone Bluetooth and the native BLE link remained on. This completes F3 check
+4 for this workload. [Method, limitations and counters](ble-throughput-baseline.md).
+Rameen re-enabled the normal app connection: the app briefly displayed a
+restart-required banner, reconnected without restarting, and then cleared the
+banner. This is recorded as an app observation; no app/fork source was changed.
+Physical photo evidence is still outstanding.
+
+**Software verified:** `make test-host` passed again after qualification. The
+firmware source is unchanged from the passing trace, normal Stolo and plain
+T-Beam Supreme builds. The benchmark harness passed a local framing, sequence
+wrap and bad-sequence rejection check. Temporary USB TCP forwarding was stopped;
+the original 600-second pairing window and enabled app connection were restored.
+
+**Device qualified — remaining evidence:** physical bench photos have not
+been supplied. Keep the PR draft for this evidence; the functional iPhone
+checklist is complete.

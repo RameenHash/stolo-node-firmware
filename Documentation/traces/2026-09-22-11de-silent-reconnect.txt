@@ -1,0 +1,44 @@
+# Device qualified: Rameen confirmed cold-boot reconnect, ready and settings
+# without a code request, keeping the iPhone bond.
+# Software verified: USB event timestamps are firmware uptime; UTC is receipt time.
+# USB output paused at connect. Queued records drained later, with drop=1014
+# from subsequent load. This is NOT a lossless trace of the throughput interval.
+2026-09-22T10:50:27.470855+00:00 [BLETRACE t=466 seq=1 radio=11DE drop=0] display.path detail=0xff0 state=255 allow=0 auth=0 pin_present=0 boundary=0 bonds=-1
+2026-09-22T10:50:27.470947+00:00 [BLETRACE t=576 seq=2 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=0 allow=0 auth=0 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:50:27.471157+00:00 [BLETRACE t=576 seq=3 radio=11DE drop=0] security.config.auth_req detail=0xd state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.471329+00:00 [BLETRACE t=576 seq=4 radio=11DE drop=0] security.config.iocap detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.471358+00:00 [BLETRACE t=576 seq=5 radio=11DE drop=0] bt_start.enter detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.506951+00:00 [BLETRACE t=779 seq=6 radio=11DE drop=0] nus.tx.handle detail=0x2d state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.507279+00:00 [BLETRACE t=779 seq=7 radio=11DE drop=0] nus.rx.handle detail=0x2a state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.507408+00:00 [BLETRACE t=782 seq=8 radio=11DE drop=0] ctrl.handle detail=0x39 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.507442+00:00 [BLETRACE t=782 seq=9 radio=11DE drop=0] event.handle detail=0x3b state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.507775+00:00 [BLETRACE t=782 seq=10 radio=11DE drop=0] event.cccd.handle detail=0x3c state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.507833+00:00 [BLETRACE t=786 seq=11 radio=11DE drop=0] gap.event detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.507871+00:00 [BLETRACE t=786 seq=12 radio=11DE drop=0] gap.event detail=0x1 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.508145+00:00 [BLETRACE t=786 seq=13 radio=11DE drop=0] gap.event detail=0x6 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.514656+00:00 [BLETRACE t=950 seq=14 radio=11DE drop=0] onConnect.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.514802+00:00 [BLETRACE t=950 seq=15 radio=11DE drop=0] resetControl.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.514953+00:00 [BLETRACE t=950 seq=16 radio=11DE drop=0] resetControl.exit detail=0x1 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.515201+00:00 [BLETRACE t=950 seq=17 radio=11DE drop=0] bt_connect.boundary detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:50:27.515297+00:00 [BLETRACE t=951 seq=18 radio=11DE drop=0] onConnect.exit detail=0x0 state=3 allow=0 auth=0 pin_present=1 boundary=1 bonds=1
+2026-09-22T10:55:56.658040+00:00 [BLETRACE t=951 seq=19 radio=11DE drop=0] gatts.connect.conn_id detail=0x0 state=3 allow=0 auth=0 pin_present=1 boundary=1 bonds=1
+2026-09-22T10:55:56.658147+00:00 [BLETRACE t=964 seq=20 radio=11DE drop=1014] stolo_poll_session.boundaries detail=0x3 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.658171+00:00 [BLETRACE t=964 seq=21 radio=11DE drop=1014] stolo_host_disconnected.enter detail=0x0 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.658424+00:00 [BLETRACE t=964 seq=22 radio=11DE drop=1014] stolo_host_disconnected.exit detail=0x3 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.658553+00:00 [BLETRACE t=969 seq=23 radio=11DE drop=1014] display.path detail=0x131 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.658747+00:00 [BLETRACE t=1247 seq=24 radio=11DE drop=1014] gap.event detail=0x37 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.658931+00:00 [BLETRACE t=1463 seq=25 radio=11DE drop=1014] onAuthenticationComplete.success detail=0x1 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.658982+00:00 [BLETRACE t=1463 seq=26 radio=11DE drop=1014] onAuthenticationComplete.fail_reason detail=0x0 state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.659153+00:00 [BLETRACE t=1463 seq=27 radio=11DE drop=1014] onAuthenticationComplete.auth_mode detail=0xd state=3 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:55:56.659406+00:00 [BLETRACE t=1463 seq=28 radio=11DE drop=1014] onAuthenticationComplete.exit detail=0x0 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:55:56.659678+00:00 [BLETRACE t=1463 seq=29 radio=11DE drop=1014] gap.event detail=0x8 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:55:56.659856+00:00 [BLETRACE t=1493 seq=30 radio=11DE drop=1014] display.path detail=0x131 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:55:56.659952+00:00 [BLETRACE t=1580 seq=31 radio=11DE drop=1014] gatts.write.handle detail=0x2e state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:55:56.660117+00:00 [BLETRACE t=1639 seq=32 radio=11DE drop=1014] gatts.write.handle detail=0x2a state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:55:56.660276+00:00 [BLETRACE t=1699 seq=33 radio=11DE drop=1014] gatts.write.handle detail=0x3c state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+# App journal excerpt, identifiers omitted:
+06:50:18.574 rnode_ble/native error disconnected: The connection has timed out unexpectedly.
+06:50:18.576 rnode_ble/native link -> connecting
+06:50:27.925 rnode_ble/native link -> connected
+06:50:28.150 rnode_ble/native link -> ready (mtu 512)
+06:50:28.210 rnode_ble/native link -> ready (mtu 512)
