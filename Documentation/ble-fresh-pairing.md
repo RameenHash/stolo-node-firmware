@@ -50,13 +50,13 @@ Node settings loaded on 11DE were confirmed by Rameen on 2026-09-21 with candida
 authenticated connected state. Other gates remain unchecked; physical photos are still needed. A sanitized
 [app journal excerpt](traces/2026-09-21-11de-app-ready.txt) corroborates ready. Rameen confirmed the enlarged digits readable on 2026-09-22.
 
-- [ ] Radio reports no bonds; iPhone Settings has no RNode bond.
+- [x] Radio reports no bonds; iPhone Settings has no RNode bond (2026-09-22).
 - [x] Fresh app connection displays the passkey on the OLED, iOS accepts that
       passkey, creates a bond and the link stays connected.
 - [x] App reaches ready and Node settings can be read (Rameen confirmed).
 - [ ] Reconnect uses the existing bond silently.
-- [ ] Forget in iOS plus node debond allows a second clean fresh pairing.
-- [ ] Original F3 check 1: no-bond cold boot needs no button press and remains
+- [x] Forget in iOS plus node debond allows a second clean fresh pairing (2026-09-22).
+- [x] Original F3 check 1: no-bond cold boot needs no button press and remains
       pairable beyond the configured window.
 - [x] Original F3 check 2: app pairing keeps the link up without a required
       post-pair disconnect/reconnect.
@@ -197,8 +197,8 @@ This satisfies the bonded cold-boot portion of F3 check 3; reconnect and the
 physical pairing window are tracked separately.
 
 **Software verified:** GET_BT read back an existing 600-second bench window.
-It was temporarily set to the standard 120 seconds for timeout tests; restore
-600 seconds after qualification. During the first gesture attempt, USB output
+It was temporarily set to the standard 120 seconds for timeout tests, then
+restored to 600 seconds with GET_BT readback at 06:46:23 EDT. During the first gesture attempt, USB output
 recorded “Starting Access Point...” and “SPIFFS Ready”. The button handler
 selects console AP mode above ten seconds and pairing above five seconds, on
 release; `update_bt()` is skipped in console mode. That excursion is not a
@@ -220,3 +220,22 @@ applied, and a later GET_BT confirmed zero bonds, Bluetooth enabled, and the
 120-second test window. No owner or radio configuration was erased.
 
 **Software verified:** [cold-boot, timed-window and debond USB evidence](traces/2026-09-22-11de-window-and-debond.txt).
+
+**Device qualified:** Rameen confirmed the no-bond cold boot automatically
+showed a pairing code without a button press and that no RNode entry remained
+in iPhone Bluetooth Settings. **Software verified:** the trace reports zero
+bonds and automatic pairing at `t=780`; at the 120-second threshold it logs
+`pairing.window_elapsed` without closing. GET_BT at 06:46:00 EDT, about
+138 seconds after boot, still reports `pairing_open=true`, `bonds=0`,
+`window_s=120`. The original 600-second window was then restored without
+closing pairing. Rameen then successfully paired from the phone, as recorded below.
+
+**Device qualified:** after the no-bond cold boot and wait beyond the test
+window, Rameen entered the enlarged code and confirmed pairing, retained
+connection, app ready and Node settings loaded. This completes forget-in-iOS
+plus node-debond fresh-pair recovery, and F3 check 1. **Software verified:**
+USB authentication succeeds at `t=202416`, with `auth_mode=0x0d`, one bond,
+`state=3 auth=1 allow=0`. The iPhone app journal independently records ready
+at 06:47:03.792 with a 512-byte maximum write payload.
+
+**Software verified:** [no-bond boot, restoration and fresh-pair recovery evidence](traces/2026-09-22-11de-fresh-recovery.txt).

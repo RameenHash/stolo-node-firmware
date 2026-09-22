@@ -1,0 +1,89 @@
+# Device qualified: Rameen confirmed automatic no-bond pairing display, no
+# RNode in iPhone Settings, then successful code entry, ready and Node settings.
+# Software verified: selected USB records and GET_BT readbacks.
+2026-09-22T10:43:42.342259+00:00 [BLETRACE t=467 seq=1 radio=11DE drop=0] display.path detail=0xff0 state=255 allow=0 auth=0 pin_present=0 boundary=0 bonds=-1
+2026-09-22T10:43:42.377512+00:00 [BLETRACE t=574 seq=2 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=0 allow=0 auth=0 pin_present=0 boundary=0 bonds=0
+2026-09-22T10:43:42.377616+00:00 [BLETRACE t=574 seq=3 radio=11DE drop=0] security.config.auth_req detail=0xd state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.377761+00:00 [BLETRACE t=574 seq=4 radio=11DE drop=0] security.config.iocap detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.377858+00:00 [BLETRACE t=574 seq=5 radio=11DE drop=0] bt_start.enter detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378053+00:00 [BLETRACE t=777 seq=6 radio=11DE drop=0] nus.tx.handle detail=0x2d state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378093+00:00 [BLETRACE t=777 seq=7 radio=11DE drop=0] nus.rx.handle detail=0x2a state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378295+00:00 [BLETRACE t=779 seq=8 radio=11DE drop=0] ctrl.handle detail=0x39 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378412+00:00 [BLETRACE t=780 seq=9 radio=11DE drop=0] event.handle detail=0x3b state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378671+00:00 [BLETRACE t=780 seq=10 radio=11DE drop=0] event.cccd.handle detail=0x3c state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378826+00:00 [BLETRACE t=780 seq=11 radio=11DE drop=0] bt_enable_pairing.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.378998+00:00 [BLETRACE t=780 seq=12 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.379243+00:00 [BLETRACE t=780 seq=13 radio=11DE drop=0] security.config.auth_req detail=0xd state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.379405+00:00 [BLETRACE t=780 seq=14 radio=11DE drop=0] security.config.iocap detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.379669+00:00 [BLETRACE t=780 seq=15 radio=11DE drop=0] bt_enable_pairing.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.379924+00:00 [BLETRACE t=784 seq=16 radio=11DE drop=0] gap.event detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.379972+00:00 [BLETRACE t=784 seq=17 radio=11DE drop=0] gap.event detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.380009+00:00 [BLETRACE t=784 seq=18 radio=11DE drop=0] gap.event detail=0x6 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.380182+00:00 [BLETRACE t=960 seq=19 radio=11DE drop=0] stolo_poll_session.boundaries detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.380415+00:00 [BLETRACE t=960 seq=20 radio=11DE drop=0] stolo_host_disconnected.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.380672+00:00 [BLETRACE t=960 seq=21 radio=11DE drop=0] stolo_host_disconnected.exit detail=0x3 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:43:42.380773+00:00 [BLETRACE t=964 seq=22 radio=11DE drop=0] display.path detail=0x121 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:45:42.166434+00:00 [BLETRACE t=120780 seq=23 radio=11DE drop=0] pairing.window_elapsed detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:51.397575+00:00 [BLETRACE t=190008 seq=28 radio=11DE drop=0] onConnect.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:51.397758+00:00 [BLETRACE t=190008 seq=29 radio=11DE drop=0] resetControl.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:51.397811+00:00 [BLETRACE t=190008 seq=30 radio=11DE drop=0] resetControl.exit detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:51.397849+00:00 [BLETRACE t=190008 seq=31 radio=11DE drop=0] bt_connect.boundary detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:51.397989+00:00 [BLETRACE t=190008 seq=32 radio=11DE drop=0] onConnect.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-22T10:46:51.398281+00:00 [BLETRACE t=190008 seq=33 radio=11DE drop=0] gatts.connect.conn_id detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=1 bonds=0
+2026-09-22T10:46:51.398792+00:00 [BLETRACE t=190010 seq=34 radio=11DE drop=0] stolo_poll_session.boundaries detail=0x2 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:51.664199+00:00 [BLETRACE t=190275 seq=35 radio=11DE drop=0] gap.event detail=0x37 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:52.279695+00:00 [BLETRACE t=190891 seq=36 radio=11DE drop=0] onPassKeyNotify detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:52.279811+00:00 [BLETRACE t=190891 seq=37 radio=11DE drop=0] gap.event detail=0xb state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:46:52.446385+00:00 [BLETRACE t=191057 seq=38 radio=11DE drop=0] gatts.write.handle detail=0x2e state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:47:03.666646+00:00 [BLETRACE t=202278 seq=39 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:47:03.666721+00:00 [BLETRACE t=202278 seq=40 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:47:03.666881+00:00 [BLETRACE t=202278 seq=41 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:47:03.728400+00:00 [BLETRACE t=202339 seq=42 radio=11DE drop=0] gap.event detail=0x9 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=0
+2026-09-22T10:47:03.833990+00:00 [BLETRACE t=202416 seq=43 radio=11DE drop=0] onAuthenticationComplete.success detail=0x1 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:47:03.834171+00:00 [BLETRACE t=202416 seq=44 radio=11DE drop=0] onAuthenticationComplete.fail_reason detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:47:03.834330+00:00 [BLETRACE t=202416 seq=45 radio=11DE drop=0] onAuthenticationComplete.auth_mode detail=0xd state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:47:03.834639+00:00 [BLETRACE t=202416 seq=46 radio=11DE drop=0] onAuthenticationComplete.exit detail=0x0 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:47:03.834782+00:00 [BLETRACE t=202416 seq=47 radio=11DE drop=0] gap.event detail=0x8 state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:47:03.835000+00:00 [BLETRACE t=202416 seq=48 radio=11DE drop=0] gatts.write.handle detail=0x2a state=3 allow=0 auth=1 pin_present=0 boundary=0 bonds=1
+# State after the 120-second no-bond threshold:
+{
+  "utc": "2026-09-22T10:46:00.612228+00:00",
+  "state": {
+    "supported": true,
+    "state": "pairing",
+    "bonds": 0,
+    "pairing_open": true,
+    "window_s": 120,
+    "enabled": true
+  }
+}
+# Restore original window:
+{
+  "utc": "2026-09-22T10:46:23.706348+00:00",
+  "accepted": {
+    "supported": true,
+    "state": "pairing",
+    "bonds": 0,
+    "pairing_open": true,
+    "window_s": 600,
+    "enabled": true,
+    "accepted_mask": 4,
+    "runtime_pending": false
+  },
+  "observed": {
+    "supported": true,
+    "state": "pairing",
+    "bonds": 0,
+    "pairing_open": true,
+    "window_s": 600,
+    "enabled": true
+  }
+}
+# iPhone journal, identifiers and unrelated app data omitted:
+06:46:47.408 rnode_ble/native link -> disconnected
+06:46:47.408 rnode_ble/native link -> scanning
+06:46:51.175 rnode_ble/native link -> disconnected
+06:46:51.176 rnode_ble/native link -> connecting
+06:46:51.645 rnode_ble/native link -> connected
+06:47:03.792 rnode_ble/native link -> ready (mtu 512)
+06:47:04.182 rnode_ble/native link -> ready (mtu 512)
