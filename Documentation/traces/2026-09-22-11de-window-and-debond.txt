@@ -1,0 +1,92 @@
+# Software verified: USB records from the enlarged-digit image.
+# Device qualified: Rameen confirmed normal bonded cold boot and readable digits
+# after a six-second button hold, without WiFi AP on the retry.
+# Bonded cold boot:
+2026-09-22T10:33:30.515789+00:00 [BLETRACE t=461 seq=1 radio=11DE drop=0] display.path detail=0xff0 state=255 allow=0 auth=0 pin_present=0 boundary=0 bonds=-1
+2026-09-22T10:33:30.515890+00:00 [BLETRACE t=570 seq=2 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=0 allow=0 auth=0 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:33:30.515913+00:00 [BLETRACE t=570 seq=3 radio=11DE drop=0] security.config.auth_req detail=0xd state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.515950+00:00 [BLETRACE t=570 seq=4 radio=11DE drop=0] security.config.iocap detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.515982+00:00 [BLETRACE t=571 seq=5 radio=11DE drop=0] bt_start.enter detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.516229+00:00 [BLETRACE t=774 seq=6 radio=11DE drop=0] nus.tx.handle detail=0x2d state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.516293+00:00 [BLETRACE t=774 seq=7 radio=11DE drop=0] nus.rx.handle detail=0x2a state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.516337+00:00 [BLETRACE t=777 seq=8 radio=11DE drop=0] ctrl.handle detail=0x39 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552234+00:00 [BLETRACE t=777 seq=9 radio=11DE drop=0] event.handle detail=0x3b state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552371+00:00 [BLETRACE t=777 seq=10 radio=11DE drop=0] event.cccd.handle detail=0x3c state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552455+00:00 [BLETRACE t=781 seq=11 radio=11DE drop=0] gap.event detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552539+00:00 [BLETRACE t=781 seq=12 radio=11DE drop=0] gap.event detail=0x1 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552596+00:00 [BLETRACE t=781 seq=13 radio=11DE drop=0] gap.event detail=0x6 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552860+00:00 [BLETRACE t=957 seq=14 radio=11DE drop=0] stolo_poll_session.boundaries detail=0x1 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.552926+00:00 [BLETRACE t=958 seq=15 radio=11DE drop=0] stolo_host_disconnected.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.553200+00:00 [BLETRACE t=958 seq=16 radio=11DE drop=0] stolo_host_disconnected.exit detail=0x3 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:33:30.553400+00:00 [BLETRACE t=962 seq=17 radio=11DE drop=0] display.path detail=0x111 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+# Configured window before testing:
+{
+  "supported": true,
+  "state": "on",
+  "bonds": 1,
+  "pairing_open": false,
+  "window_s": 600,
+  "enabled": true
+}
+# Temporary 120-second window:
+{
+  "accepted": {
+    "supported": true,
+    "state": "on",
+    "bonds": 1,
+    "pairing_open": false,
+    "window_s": 120,
+    "enabled": true,
+    "accepted_mask": 4,
+    "runtime_pending": false
+  },
+  "observed": {
+    "supported": true,
+    "state": "on",
+    "bonds": 1,
+    "pairing_open": false,
+    "window_s": 120,
+    "enabled": true
+  }
+}
+# Normal-mode physical pairing gesture and timeout:
+2026-09-22T10:39:10.003879+00:00 [BLETRACE t=84592 seq=18 radio=11DE drop=0] bt_enable_pairing.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:39:10.003978+00:00 [BLETRACE t=84592 seq=19 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:39:10.004088+00:00 [BLETRACE t=84592 seq=20 radio=11DE drop=0] security.config.auth_req detail=0xd state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:39:10.004237+00:00 [BLETRACE t=84592 seq=21 radio=11DE drop=0] security.config.iocap detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:39:10.004360+00:00 [BLETRACE t=84592 seq=22 radio=11DE drop=0] bt_enable_pairing.exit detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:39:10.004499+00:00 [BLETRACE t=84691 seq=23 radio=11DE drop=0] display.path detail=0x121 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:41:09.045584+00:00 [BLETRACE t=204597 seq=24 radio=11DE drop=0] pairing.window_elapsed detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:41:09.045762+00:00 [BLETRACE t=204597 seq=25 radio=11DE drop=0] bt_disable_pairing.enter detail=0x0 state=2 allow=1 auth=0 pin_present=1 boundary=0 bonds=1
+2026-09-22T10:41:09.045805+00:00 [BLETRACE t=204597 seq=26 radio=11DE drop=0] bt_disable_pairing.exit detail=0x0 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=1
+2026-09-22T10:41:09.220321+00:00 [BLETRACE t=204741 seq=27 radio=11DE drop=0] display.path detail=0x111 state=1 allow=0 auth=0 pin_present=0 boundary=0 bonds=1
+# Bond removal accepted and verified by a later GET_BT:
+{
+  "utc": "2026-09-22T10:41:42.130386+00:00",
+  "before": {
+    "supported": true,
+    "state": "on",
+    "bonds": 1,
+    "pairing_open": false,
+    "window_s": 120,
+    "enabled": true
+  },
+  "accepted": {
+    "supported": true,
+    "state": "on",
+    "bonds": 0,
+    "pairing_open": false,
+    "window_s": 120,
+    "enabled": true,
+    "accepted_mask": 2,
+    "runtime_pending": true
+  },
+  "after": {
+    "supported": true,
+    "state": "on",
+    "bonds": 0,
+    "pairing_open": false,
+    "window_s": 120,
+    "enabled": true
+  }
+}

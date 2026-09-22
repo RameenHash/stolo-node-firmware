@@ -1,0 +1,13 @@
+# Software verified: selected iPhone app journal records, retrieved 2026-09-22.
+# These timestamps correlate with the 2026-09-21 USB pairing and post-upload reconnect.
+# Peripheral identifiers and unrelated app data omitted.
+09:13:47.066 rnode_ble/native link -> disconnected
+09:13:47.066 rnode_ble/native link -> scanning
+09:13:48.004 rnode_ble/native link -> disconnected
+09:13:48.007 rnode_ble/native link -> connecting
+09:13:48.464 rnode_ble/native link -> connected
+09:14:04.778 rnode_ble/native link -> ready (mtu 512)
+09:14:05.137 rnode_ble/native link -> ready (mtu 512)
+09:21:20.794 rnode_ble/native link -> connected
+09:21:21.028 rnode_ble/native link -> ready (mtu 512)
+09:21:21.088 rnode_ble/native link -> ready (mtu 512)

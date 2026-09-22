@@ -47,8 +47,8 @@ capture of every ATT request rejected inside the stack.
 **Device qualified:** fresh passkey pairing, a connected iPhone link, app ready and
 Node settings loaded on 11DE were confirmed by Rameen on 2026-09-21 with candidate `b1d6a56`. The
 [success trace](traces/2026-09-21-11de-success.txt) records one bond and
-authenticated connected state. Other gates remain unchecked; no photos or app
-log have been supplied. The larger-digit follow-up still needs visual review.
+authenticated connected state. Other gates remain unchecked; physical photos are still needed. A sanitized
+[app journal excerpt](traces/2026-09-21-11de-app-ready.txt) corroborates ready. Rameen confirmed the enlarged digits readable on 2026-09-22.
 
 - [ ] Radio reports no bonds; iPhone Settings has no RNode bond.
 - [x] Fresh app connection displays the passkey on the OLED, iOS accepts that
@@ -112,7 +112,7 @@ The iOS bridge remains outside this PR; further bridge evidence requires a
 separate fork PR.
 
 **Device qualified:** the later successful 11DE pairing supersedes these
-pre-fix failures; see the success record below. Reconnect, forget/debond recovery, remaining F3 checks, photos and app log
+pre-fix failures; see the success record below. Reconnect, forget/debond recovery, remaining F3 checks and photos
 are pending; Rameen subsequently confirmed ready and Node settings loaded.
 
 ## Candidate fixes after the captured failure
@@ -164,8 +164,7 @@ silent reconnect, recovery and throughput remain pending.
 6×10 pixels. Six digits span 56 pixels with four-pixel margins and clear
 four-pixel gaps; they remain below the PAIRING label within the 64×64 panel.
 The production-renderer tests check all ten digits at doubled size, gaps,
-margins, clipping and leading zeros. Physical review of the enlarged code
-is pending; SMP, bond storage and retry behavior are unchanged by this follow-up.
+margins, clipping and leading zeros. Rameen subsequently confirmed all enlarged digits readable (device qualified); SMP, bond storage and retry behavior are unchanged by this follow-up.
 
 **Software verified:** enlarged-digit `make test-host` passes; T-Beam Supreme
 trace, normal Stolo and plain builds pass at 1,466,197, 1,463,549 and
@@ -187,5 +186,37 @@ so removal from the phone alone has not established a bond-free radio.
 [Recovery evidence](traces/2026-09-22-11de-hash-recovery.txt).
 
 **Device qualified:** Rameen confirmed on 2026-09-22 that the physical OLED
-returned to its normal screen after the hash repair and reset. Enlarged PIN
-readability and the remaining BLE qualification gates are still pending.
+returned to its normal screen after the hash repair and reset. The remaining BLE qualification gates are still pending.
+
+## Continued qualification, 2026-09-22
+
+**Device qualified:** Rameen powered 11DE off and on without holding a button
+or connecting the app and confirmed a normal screen with no pairing code.
+The corresponding USB cold-boot trace reports `bonds=1 state=1 allow=0`.
+This satisfies the bonded cold-boot portion of F3 check 3; reconnect and the
+physical pairing window are tracked separately.
+
+**Software verified:** GET_BT read back an existing 600-second bench window.
+It was temporarily set to the standard 120 seconds for timeout tests; restore
+600 seconds after qualification. During the first gesture attempt, USB output
+recorded “Starting Access Point...” and “SPIFFS Ready”. The button handler
+selects console AP mode above ten seconds and pairing above five seconds, on
+release; `update_bt()` is skipped in console mode. That excursion is not a
+valid normal-mode pairing timeout result. A USB reset exited console mode;
+GET_WIFI showed the persisted Wi-Fi setting was off, and Bluetooth was
+re-enabled after intervening short presses toggled it off. The retry uses one
+six-second hold. No firmware behavior was changed for this observation.
+
+**Device qualified:** on the retry, Rameen confirmed that one six-second hold
+opened the pairing screen without Wi-Fi AP mode and that all six enlarged
+digits were readable. The matching trace records pairing open with one bond
+at `t=84592` (06:39:10 EDT); the timeout check follows separately.
+
+**Software verified:** the normal-mode bonded window expired at `t=204597`,
+120.005 seconds after the six-second gesture opened it. `bt_disable_pairing`
+cleared permission and the passkey, returned to `state=1`, and retained one
+bond. Subsequent GET_BT confirmed pairing closed. SET_BT debond was then
+applied, and a later GET_BT confirmed zero bonds, Bluetooth enabled, and the
+120-second test window. No owner or radio configuration was erased.
+
+**Software verified:** [cold-boot, timed-window and debond USB evidence](traces/2026-09-22-11de-window-and-debond.txt).
