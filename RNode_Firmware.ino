@@ -1,3 +1,4 @@
+// Modified by Stolo Systems Inc., 2026-09-21 — optional buffered BLE bench trace.
 // Copyright (C) 2024, Mark Qvist
 // Modified by Stolo Systems Inc., 2026-09-19 — display recovery announcements.
 
@@ -1876,6 +1877,7 @@ void tx_queue_handler() {
 void work_while_waiting() { loop(); }
 
 void loop() {
+  STOLO_BT_TRACE_DRAIN();
   if (radio_online) {
     #if MCU_VARIANT == MCU_ESP32
       modem_packet_t *modem_packet = NULL;

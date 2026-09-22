@@ -13,6 +13,9 @@ The extracted files are generated under ignored `build/host/`.
 |---|---|
 | `display_test.cpp` | F8: complete banner priority matrix, simultaneous fault placement, two-digit countdown saturation before byte conversion, countdown and notice expiry across millis wrap, real ENROLL/RESCUE success and failure transitions, HELLO byte in display/headless builds; generated artwork freshness via `Tools/oled_bitmaps.py --check` |
 | `control_test.cpp` | Real CTRL parser + SCP dispatcher + NUS dispatcher: routing, escaping, interleaving, authorization, lifecycle, overflow/malformed recovery, shared-session LEAVE and EVENT action ordering |
+| `ble_pairing_test.cpp` | Real ESP32 BLE callbacks: connect/boundary, authoritative stack PIN, failed/cancelled retry, success, explicit close, bonded expiry and clock wrap |
+| `pairing_display_test.cpp` | Production PIN renderer + assets: visible light-on-dark pixels for all digits and leading zeros; baseline inverse glyphs fail |
+| `ble_trace_test.cpp` | Production trace queue/drain: callback-time state, USB backpressure, bounded drain, sequence/drop accounting and omission of passkeys |
 | `ble_control_test.cpp` | Extracted production BLESerial GATT setup, FIFO, RX callbacks and EVENT sender: permissions, advertisement, MTU chunks, queue overflow, generation and subscription boundaries (fake stack) |
 | `dispatcher_test.cpp` | C1: every pair of source transitions, queued bytes, SCP/escape state, mid-frame disconnect, mutation role check, authorized positive case |
 | `store_test.cpp` | C2/C3: slot/floor/activation write faults and restart snapshots, pre-floor upgrade, oversized/truncated slots, missing activation, namespace/read/length errors |

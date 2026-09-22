@@ -1,0 +1,36 @@
+{
+  "utc": "2026-09-22T11:00:46.021213+00:00",
+  "workload": "read-only KISS SCP GET_RADIO, concurrent channels",
+  "seconds": 60.0,
+  "batch": 8,
+  "results": [
+    {
+      "channel": "NUS",
+      "requests": 3936,
+      "replies": 3936,
+      "tx_bytes": 23647,
+      "rx_bytes": 130027,
+      "non_scp_frames": 24,
+      "integrity_errors": 0,
+      "error": null,
+      "elapsed_s": 60.093652,
+      "reply_payload_Bps": 1702.94,
+      "requests_per_s": 65.5,
+      "pass": true
+    },
+    {
+      "channel": "CTRL",
+      "requests": 3936,
+      "replies": 3936,
+      "tx_bytes": 23646,
+      "rx_bytes": 129918,
+      "non_scp_frames": 0,
+      "integrity_errors": 0,
+      "error": null,
+      "elapsed_s": 60.064916,
+      "reply_payload_Bps": 1703.76,
+      "requests_per_s": 65.53,
+      "pass": true
+    }
+  ]
+}

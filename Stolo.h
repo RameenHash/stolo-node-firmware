@@ -25,6 +25,7 @@
 #define STOLO_H
 
 #include <stdint.h>
+#include "StoloBleTrace.h"
 
 #define STOLO_FW_VERSION "0.2.1"
 

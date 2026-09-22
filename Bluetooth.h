@@ -181,9 +181,65 @@ char bt_devname[11];
     bool ble_authenticated = false;
     uint32_t pairing_pin = 0;
 
+    // Modified by Stolo Systems Inc., 2026-09-21 — SMP tracing and open-window pairing retries.
+    #if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
+      extern volatile bool stolo_ble_boundary_pending;
+      struct StoloBleTraceRecord {
+        const char* event;
+        uint32_t time, detail, sequence;
+        uint8_t state, allow, authenticated, pin_present, boundary;
+        int bonds;
+      };
+      static StoloBleTraceRecord stolo_ble_trace_queue[64];
+      static uint32_t stolo_ble_trace_head = 0, stolo_ble_trace_tail = 0;
+      static uint32_t stolo_ble_trace_sequence = 0, stolo_ble_trace_dropped = 0;
+      static portMUX_TYPE stolo_ble_trace_mux = portMUX_INITIALIZER_UNLOCKED;
+
+      // Capture in the BLE task; only the firmware loop writes diagnostic USB.
+      // Sequence gaps/drop count make an incomplete capture explicit.
+      void stolo_ble_trace(const char* event, uint32_t detail) {
+        StoloBleTraceRecord record = {event, millis(), detail, 0, bt_state,
+            bt_allow_pairing, ble_authenticated, bt_ssp_pin != 0,
+            __atomic_load_n(&stolo_ble_boundary_pending, __ATOMIC_ACQUIRE),
+            esp_ble_get_bond_device_num()};
+        portENTER_CRITICAL(&stolo_ble_trace_mux);
+        record.sequence = ++stolo_ble_trace_sequence;
+        if (stolo_ble_trace_head - stolo_ble_trace_tail < 64) {
+          stolo_ble_trace_queue[stolo_ble_trace_head++ % 64] = record;
+        } else { ++stolo_ble_trace_dropped; }
+        portEXIT_CRITICAL(&stolo_ble_trace_mux);
+      }
+
+      void stolo_ble_trace_drain() {
+        for (unsigned i = 0; i < 8; ++i) {
+          portENTER_CRITICAL(&stolo_ble_trace_mux);
+          if (stolo_ble_trace_head == stolo_ble_trace_tail) {
+            portEXIT_CRITICAL(&stolo_ble_trace_mux);
+            return;
+          }
+          StoloBleTraceRecord r = stolo_ble_trace_queue[stolo_ble_trace_tail % 64];
+          uint32_t dropped = stolo_ble_trace_dropped;
+          portEXIT_CRITICAL(&stolo_ble_trace_mux);
+          char line[256];
+          int length = snprintf(line, sizeof(line),
+              "[BLETRACE t=%lu seq=%lu radio=%02X%02X drop=%lu] %s detail=0x%lx state=%u allow=%u auth=%u pin_present=%u boundary=%u bonds=%d\n",
+              (unsigned long)r.time, (unsigned long)r.sequence,
+              (unsigned char)bt_dh[14], (unsigned char)bt_dh[15], (unsigned long)dropped,
+              r.event, (unsigned long)r.detail, r.state, r.allow, r.authenticated,
+              r.pin_present, r.boundary, r.bonds);
+          if (length <= 0 || length >= (int)sizeof(line) || Serial.availableForWrite() < length) return;
+          Serial.write((const uint8_t*)line, length);
+          portENTER_CRITICAL(&stolo_ble_trace_mux);
+          ++stolo_ble_trace_tail;
+          portEXIT_CRITICAL(&stolo_ble_trace_mux);
+        }
+      }
+    #endif
+
     void bt_flush() { if (bt_state == BT_STATE_CONNECTED) { SerialBT.flush(); } }
 
     void bt_start() {
+      STOLO_BT_TRACE("bt_start.enter", 0);
       // Serial.println("BT start");
       display_unblank();
       if (bt_state == BT_STATE_OFF) {
@@ -200,6 +256,7 @@ char bt_devname[11];
     }
 
     void bt_stop() {
+      STOLO_BT_TRACE("bt_stop.enter", 0);
       // Serial.println("BT stop");
       display_unblank();
       if (bt_state != BT_STATE_OFF) {
@@ -221,6 +278,7 @@ char bt_devname[11];
     }
 
     void bt_debond_all() {
+      STOLO_BT_TRACE("bt_debond_all.enter", 0);
       // Serial.println("Debonding all");
       int dev_num = esp_ble_get_bond_device_num();
       esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
@@ -231,9 +289,16 @@ char bt_devname[11];
 
     #if defined(STOLO_BUILD)
       bool stolo_bt_has_bonds() { return esp_ble_get_bond_device_num() > 0; }
+      bool stolo_bt_pairing_window_open() {
+        // A failed/cancelled attempt cannot extend a bonded owner's deadline
+        // or reopen a window explicitly closed by the user.
+        return bt_allow_pairing && bt_state != BT_STATE_OFF &&
+            (!stolo_bt_has_bonds() || (uint32_t)(millis() - bt_pairing_started) < BT_PAIRING_TIMEOUT);
+      }
     #endif
 
     void bt_enable_pairing() {
+      STOLO_BT_TRACE("bt_enable_pairing.enter", 0);
       // Serial.println("BT enable pairing");
       display_unblank();
       if (bt_state == BT_STATE_OFF) bt_start();
@@ -244,17 +309,21 @@ char bt_devname[11];
       bt_pairing_started = millis();
       bt_state = BT_STATE_PAIRING;
       bt_ssp_pin = pairing_pin;
+      STOLO_BT_TRACE("bt_enable_pairing.exit", 0);
     }
 
     void bt_disable_pairing() {
+      STOLO_BT_TRACE("bt_disable_pairing.enter", 0);
       // Serial.println("BT disable pairing");
       display_unblank();
       bt_allow_pairing = false;
       bt_ssp_pin = 0;
       bt_state = BT_STATE_ON;
+      STOLO_BT_TRACE("bt_disable_pairing.exit", 0);
     }
 
     void bt_passkey_notify_callback(uint32_t passkey) {
+      STOLO_BT_TRACE("onPassKeyNotify", passkey == bt_ssp_pin);
       // Serial.printf("Got passkey notification: %d\n", passkey);
       if (bt_allow_pairing) {
         bt_ssp_pin = passkey;
@@ -262,11 +331,13 @@ char bt_devname[11];
         kiss_indicate_btpin();
       } else {
         // Serial.println("Pairing not allowed, re-init");
+        STOLO_BT_TRACE("onPassKeyNotify.reject", 0);
         SerialBT.disconnect();
       }
     }
 
     bool bt_confirm_pin_callback(uint32_t pin) {
+      STOLO_BT_TRACE("onConfirmPIN.accept", 1);
       // Serial.printf("Confirm PIN callback: %d\n", pin);
       return true;
     }
@@ -278,6 +349,7 @@ char bt_devname[11];
     }
 
     uint32_t bt_passkey_callback() {
+      STOLO_BT_TRACE("onPassKeyRequest", 0);
       // Serial.println("API passkey request");
       if (pairing_pin == 0) { bt_update_passkey(); }
       return pairing_pin;
@@ -288,6 +360,7 @@ char bt_devname[11];
     }
 
     bool bt_security_request_callback() {
+      STOLO_BT_TRACE("onSecurityRequest.accept", bt_allow_pairing);
       if (bt_allow_pairing) {
           // Serial.println("Accepting security request");
           return true;
@@ -298,6 +371,9 @@ char bt_devname[11];
     }
 
     void bt_authentication_complete_callback(esp_ble_auth_cmpl_t auth_result) {
+      STOLO_BT_TRACE("onAuthenticationComplete.success", auth_result.success);
+      STOLO_BT_TRACE("onAuthenticationComplete.fail_reason", auth_result.fail_reason);
+      STOLO_BT_TRACE("onAuthenticationComplete.auth_mode", auth_result.auth_mode);
       if (auth_result.success == true) {
         // Serial.println("Authentication success");
         ble_authenticated = true;
@@ -315,16 +391,30 @@ char bt_devname[11];
       } else {
         // Serial.println("Authentication fail");
         ble_authenticated = false;
+        #if defined(STOLO_BUILD)
+          const bool retry_pairing = stolo_bt_pairing_window_open();
+        #endif
         bt_state = BT_STATE_ON;
         bt_update_passkey();
         bt_security_setup();
+        #if defined(STOLO_BUILD)
+          if (retry_pairing) {
+            // Keep the newly generated code visible for another attempt.
+            // Do not renew the existing presence window's start time.
+            bt_state = BT_STATE_PAIRING;
+            STOLO_BT_TRACE("onAuthenticationComplete.retry", 1);
+            return;
+          }
+        #endif
       }
       bt_allow_pairing = false;
       bt_ssp_pin = 0;
+      STOLO_BT_TRACE("onAuthenticationComplete.exit", 0);
     }
 
     void bt_connect_callback(BLEServer *server) {
       #if defined(STOLO_BUILD)
+        STOLO_BT_TRACE("bt_connect.boundary", 0);
         stolo_ble_connection_boundary();
       #endif
       uint16_t conn_id = server->getConnId();
@@ -340,8 +430,13 @@ char bt_devname[11];
       // Serial.printf("Disconnected: %d\n", conn_id);
       display_unblank();
       ble_authenticated = false;
-      bt_state = BT_STATE_ON;
       #if defined(STOLO_BUILD)
+        bt_state = stolo_bt_pairing_window_open() ? BT_STATE_PAIRING : BT_STATE_ON;
+      #else
+        bt_state = BT_STATE_ON;
+      #endif
+      #if defined(STOLO_BUILD)
+        STOLO_BT_TRACE("bt_disconnect.boundary", 0);
         stolo_ble_connection_boundary(); // revoke now; loop owns parser teardown
       #endif
     }
@@ -380,6 +475,7 @@ char bt_devname[11];
     }
 
     void bt_security_setup() {
+      STOLO_BT_TRACE("bt_security_setup.enter", 0);
       // Serial.println("Executing BT security setup");
       if (pairing_pin == 0) { bt_update_passkey(); }
       uint32_t passkey = pairing_pin;
@@ -394,6 +490,8 @@ char bt_devname[11];
       uint8_t oob_support = ESP_BLE_OOB_DISABLE;
 
       esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;
+      STOLO_BT_TRACE("security.config.auth_req", auth_req);
+      STOLO_BT_TRACE("security.config.iocap", iocap);
 
       esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey, sizeof(uint32_t));
       esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(uint8_t));
@@ -407,6 +505,7 @@ char bt_devname[11];
 
     void update_bt() {
       if (bt_allow_pairing && millis()-bt_pairing_started >= BT_PAIRING_TIMEOUT) {
+        STOLO_BT_TRACE("pairing.window_elapsed", 0);
         #if defined(STOLO_BUILD)
           // No bonds yet: the window does not close, or a factory-fresh
           // unit with no cable would be unreachable. Once one phone is

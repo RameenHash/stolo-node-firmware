@@ -211,7 +211,9 @@ void stolo_note_source(uint8_t source) {
 
 // Loop-side teardown on BLE boundary, WiFi close/timeout, LEAVE and RESET.
 void stolo_host_disconnected() {
+  STOLO_BT_TRACE("stolo_host_disconnected.enter", stolo_session.source);
   stolo_session_reset(stolo_session.source);
+  STOLO_BT_TRACE("stolo_host_disconnected.exit", stolo_conn_generation);
 }
 
 // USB event task only posts a flag; parser/FIFO state belongs to the loop.
@@ -224,6 +226,9 @@ void stolo_ble_connection_boundary() { __atomic_store_n(&stolo_ble_boundary_pend
 bool stolo_poll_session() {
   bool boundary = __atomic_exchange_n(&stolo_usb_boundary_pending, false, __ATOMIC_ACQ_REL);
   bool ble_boundary = __atomic_exchange_n(&stolo_ble_boundary_pending, false, __ATOMIC_ACQ_REL);
+  if (boundary || ble_boundary) {
+    STOLO_BT_TRACE("stolo_poll_session.boundaries", (boundary ? 1 : 0) | (ble_boundary ? 2 : 0));
+  }
   uint32_t timeout = stolo_session.source == STOLO_SRC_USB ? STOLO_USB_SESSION_IDLE_MS : STOLO_SESSION_IDLE_MS;
   if ((boundary && stolo_session.source == STOLO_SRC_USB)
       || (ble_boundary && stolo_session.source == STOLO_SRC_BLE)

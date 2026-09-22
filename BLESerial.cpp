@@ -21,6 +21,29 @@
 #if HAS_BLE
 
 #include "BLESerial.h"
+#include "StoloBleTrace.h"
+
+// Modified by Stolo Systems Inc., 2026-09-21 — opt-in USB pairing trace.
+#if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
+static void stolo_trace_gap(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t* param) {
+  STOLO_BT_TRACE("gap.event", event);
+}
+
+static void stolo_trace_gatts(esp_gatts_cb_event_t event, esp_gatt_if_t interface,
+                              esp_ble_gatts_cb_param_t* param) {
+  switch (event) {
+    case ESP_GATTS_CONNECT_EVT:
+      STOLO_BT_TRACE("gatts.connect.conn_id", param->connect.conn_id); break;
+    case ESP_GATTS_DISCONNECT_EVT:
+      STOLO_BT_TRACE("gatts.disconnect.reason", param->disconnect.reason); break;
+    case ESP_GATTS_WRITE_EVT:
+      STOLO_BT_TRACE("gatts.write.handle", param->write.handle); break;
+    case ESP_GATTS_READ_EVT:
+      STOLO_BT_TRACE("gatts.read.handle", param->read.handle); break;
+    default: break;
+  }
+}
+#endif
 
 uint32_t bt_passkey_callback();
 void bt_passkey_notify_callback(uint32_t passkey);
@@ -36,17 +59,21 @@ void BLESerial::onPassKeyNotify(uint32_t passkey) { bt_passkey_notify_callback(p
 bool BLESerial::onSecurityRequest() { return bt_security_request_callback(); }
 void BLESerial::onAuthenticationComplete(esp_ble_auth_cmpl_t auth_result) { bt_authentication_complete_callback(auth_result); }
 void BLESerial::onConnect(BLEServer *server) {
+  STOLO_BT_TRACE("onConnect.enter", server->getConnId());
   #if defined(STOLO_BUILD)
     resetControl();
   #endif
   bt_connect_callback(server);
+  STOLO_BT_TRACE("onConnect.exit", server->getConnId());
 }
 void BLESerial::onDisconnect(BLEServer *server) {
+  STOLO_BT_TRACE("onDisconnect.enter", server->getConnId());
   #if defined(STOLO_BUILD)
     resetControl();
     rx_buffer.clear(); transmitBufferLength = 0; numAvailableLines = 0;
   #endif
   bt_disconnect_callback(server); ble_server->startAdvertising();
+  STOLO_BT_TRACE("onDisconnect.exit", server->getConnId());
 }
 bool BLESerial::onConfirmPIN(uint32_t pin) { return bt_confirm_pin_callback(pin); };
 bool BLESerial::connected() { return ble_server->getConnectedCount() > 0; }
@@ -110,6 +137,7 @@ void BLESerial::flush() {
 }
 
 void BLESerial::disconnect() {
+  STOLO_BT_TRACE("local.disconnect.request", ble_server->getConnectedCount());
   if (ble_server->getConnectedCount() > 0) {
     uint16_t conn_id = ble_server->getConnId();
     // Serial.printf("Have connected: %d\n", conn_id);
@@ -123,6 +151,10 @@ void BLESerial::disconnect() {
 void BLESerial::begin(const char *name) {
   ConnectedDeviceCount = 0;
   BLEDevice::init(name);
+  #if defined(STOLO_BUILD) && defined(STOLO_BLE_TRACE) && STOLO_BLE_TRACE
+    BLEDevice::setCustomGapHandler(stolo_trace_gap);
+    BLEDevice::setCustomGattsHandler(stolo_trace_gatts);
+  #endif
 
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9); 
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
@@ -154,7 +186,7 @@ void BLESerial::stopAdvertising() {
   ble_adv->stop();
 }
 
-void BLESerial::end() { BLEDevice::deinit(); }
+void BLESerial::end() { STOLO_BT_TRACE("local.deinit", 0); BLEDevice::deinit(); }
 
 void BLESerial::onWrite(BLECharacteristic *characteristic) {
   #if defined(STOLO_BUILD)
@@ -195,6 +227,8 @@ void BLESerial::SetupSerialService() {
   TxCharacteristic->setReadProperty(true);
 
   SerialService->start();
+  STOLO_BT_TRACE("nus.tx.handle", TxCharacteristic->getHandle());
+  STOLO_BT_TRACE("nus.rx.handle", RxCharacteristic->getHandle());
 }
 
 #if defined(STOLO_BUILD)
@@ -211,9 +245,13 @@ void BLESerial::SetupControlService() {
   EventCCCD->setAccessPermissions((esp_gatt_perm_t)(ESP_GATT_PERM_READ_ENC_MITM | ESP_GATT_PERM_WRITE_ENC_MITM));
   EventCharacteristic->addDescriptor(EventCCCD);
   service->start(); // Discover after NUS connect; no extra advertising UUID.
+  STOLO_BT_TRACE("ctrl.handle", CtrlCharacteristic->getHandle());
+  STOLO_BT_TRACE("event.handle", EventCharacteristic->getHandle());
+  STOLO_BT_TRACE("event.cccd.handle", EventCCCD->getHandle());
 }
 
 void BLESerial::resetControl() {
+  STOLO_BT_TRACE("resetControl.enter", control_generation);
   portENTER_CRITICAL(&control_mux);
   ++control_generation;
   control_rx.clear(); control_overflow = false;
@@ -221,6 +259,7 @@ void BLESerial::resetControl() {
   if (EventCCCD) EventCCCD->setNotifications(false);
   // Do not retain the previous host's last notification in the attribute.
   if (EventCharacteristic) EventCharacteristic->setValue((uint8_t*)"", 0);
+  STOLO_BT_TRACE("resetControl.exit", control_generation);
 }
 
 uint32_t BLESerial::controlGeneration() {

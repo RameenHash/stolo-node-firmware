@@ -8,6 +8,7 @@
 #include <functional>
 #include <cstdio>
 #define STOLO_BUILD 1
+#include "StoloBleTrace.h"
 #define BLE_BUFFER_SIZE 512
 #define portENTER_CRITICAL(mux) (++*(mux))
 #define portEXIT_CRITICAL(mux) (--*(mux))
