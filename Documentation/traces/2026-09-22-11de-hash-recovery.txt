@@ -1,0 +1,25 @@
+# Software verified: firmware hash readback and post-reset boot diagnostics.
+# Software verified: USB display readback after reset reads DEVICE CHECKS PASSED.
+# Device qualified: physical screen confirmation is pending.
+[06:22:39] Opening serial port /dev/cu.usbmodem1101...
+[06:22:42] Device connected
+[06:22:42] Current firmware version: 1.86
+[06:22:42] Reading EEPROM...
+[06:22:43] EEPROM checksum correct
+[06:22:43] Device signature validated
+[06:22:43] The target firmware hash is: f08349a5df4c4b4874f2378d32d3aef563ee686d1062b89fd4dda9ddfd651f08
+[06:22:43] The actual firmware hash is: f08349a5df4c4b4874f2378d32d3aef563ee686d1062b89fd4dda9ddfd651f08
+[BLETRACE t=462 seq=1 radio=11DE drop=0] display.path detail=0xff0 state=255 allow=0 auth=0 pin_present=0 boundary=0 bonds=-1
+[BLETRACE t=575 seq=2 radio=11DE drop=0] bt_security_setup.enter detail=0x0 state=0 allow=0 auth=0 pin_present=0 boundary=0 bonds=1
+[BLETRACE t=575 seq=3 radio=11DE drop=0] security.config.auth_req detail=0xd state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=575 seq=4 radio=11DE drop=0] security.config.iocap detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=576 seq=5 radio=11DE drop=0] bt_start.enter detail=0x0 state=0 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=779 seq=6 radio=11DE drop=0] nus.tx.handle detail=0x2d state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=779 seq=7 radio=11DE drop=0] nus.rx.handle detail=0x2a state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=781 seq=8 radio=11DE drop=0] ctrl.handle detail=0x39 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=782 seq=9 radio=11DE drop=0] event.handle detail=0x3b state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=782 seq=10 radio=11DE drop=0] event.cccd.handle detail=0x3c state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=786 seq=11 radio=11DE drop=0] gap.event detail=0x0 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=786 seq=12 radio=11DE drop=0] gap.event detail=0x1 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=786 seq=13 radio=11DE drop=0] gap.event detail=0x6 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1
+[BLETRACE t=966 seq=14 radio=11DE drop=0] display.path detail=0x111 state=1 allow=0 auth=0 pin_present=1 boundary=0 bonds=1

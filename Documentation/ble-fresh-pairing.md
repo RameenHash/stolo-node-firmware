@@ -172,4 +172,16 @@ trace, normal Stolo and plain builds pass at 1,466,197, 1,463,549 and
 1,442,429 bytes respectively. The ROM-loader upload completed with flash hash
 verification after the RAM-stub uploader failed before writing. USB records
 from the new image show `state=3 auth=1 bonds=1` after reboot. The phone-side
-silent reconnect observation and the firmware-hash target update are pending.
+silent reconnect observation remains pending. The firmware-hash target update
+was completed and read back over USB on 2026-09-22, after the phone was removed.
+
+**Software verified:** the reported “corrupt firmware” warning after the
+enlarged-digit upload was consistent with the unfinished firmware-hash target
+update. With BLE disconnected, `rnodeconf --firmware-hash` completed; subsequent
+USB reads returned the same target and actual hash, matching the built image:
+`f08349a5df4c4b4874f2378d32d3aef563ee686d1062b89fd4dda9ddfd651f08`.
+No reflashing or bond erasure was needed for this repair. After an explicit
+USB reset, the display canvas reads “DEVICE CHECKS PASSED”; physical screen
+confirmation remains pending. The boot trace still reports one radio bond,
+so removal from the phone alone has not established a bond-free radio.
+[Recovery evidence](traces/2026-09-22-11de-hash-recovery.txt).
