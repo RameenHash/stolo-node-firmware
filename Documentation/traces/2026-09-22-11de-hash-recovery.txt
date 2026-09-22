@@ -1,6 +1,6 @@
 # Software verified: firmware hash readback and post-reset boot diagnostics.
 # Software verified: USB display readback after reset reads DEVICE CHECKS PASSED.
-# Device qualified: physical screen confirmation is pending.
+# Device qualified: Rameen confirmed the physical OLED returned to its normal screen on 2026-09-22.
 [06:22:39] Opening serial port /dev/cu.usbmodem1101...
 [06:22:42] Device connected
 [06:22:42] Current firmware version: 1.86

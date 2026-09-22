@@ -181,7 +181,11 @@ update. With BLE disconnected, `rnodeconf --firmware-hash` completed; subsequent
 USB reads returned the same target and actual hash, matching the built image:
 `f08349a5df4c4b4874f2378d32d3aef563ee686d1062b89fd4dda9ddfd651f08`.
 No reflashing or bond erasure was needed for this repair. After an explicit
-USB reset, the display canvas reads “DEVICE CHECKS PASSED”; physical screen
-confirmation remains pending. The boot trace still reports one radio bond,
+USB reset, the display canvas reads “DEVICE CHECKS PASSED”. The boot trace
+still reports one radio bond,
 so removal from the phone alone has not established a bond-free radio.
 [Recovery evidence](traces/2026-09-22-11de-hash-recovery.txt).
+
+**Device qualified:** Rameen confirmed on 2026-09-22 that the physical OLED
+returned to its normal screen after the hash repair and reset. Enlarged PIN
+readability and the remaining BLE qualification gates are still pending.
